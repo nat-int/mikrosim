@@ -1,0 +1,20 @@
+#pragma once
+
+#include "defs.hpp"
+
+namespace version {
+	constexpr u32 major = ${Mikrosim_VERSION_MAJOR};
+	constexpr u32 minor = ${Mikrosim_VERSION_MINOR};
+	constexpr u32 patch = ${Mikrosim_VERSION_PATCH};
+	constexpr u32 tweak = ${Mikrosim_VERSION_TWEAK};
+
+	constexpr u32 combined = major << 24 | minor << 16 | patch << 8 | tweak;
+}
+namespace compile_options {
+	constexpr bool vulkan_validation = ${VULKAN_VALIDATION};
+	constexpr bool vulkan_validation_supress_loader_info = ${VULKAN_VALIDATION_SUPRESS_LOADER_INFO};
+	constexpr bool vulkan_validation_abort = ${VULKAN_VALIDATION_ABORT};
+	constexpr u32 frames_in_flight = ${FRAMES_IN_FLIGHT};
+#define WINDOW_CALLBACK_GENERATOR(name) ${WINDOW_CALLBACK_GENERATOR}
+}
+
