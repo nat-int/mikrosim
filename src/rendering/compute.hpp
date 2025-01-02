@@ -103,7 +103,7 @@ namespace rend {
 			inline void barrier_main_buffer(barrier &b, vk::AccessFlags from, vk::AccessFlags to,
 				const std::vector<usize> &frame_offsets={0}) {
 				for (usize off : frame_offsets) {
-					b.buff(from, to, mbuff(off), proc->buffer_sizes[0]);
+					b.buff(from, to, *mbuff(off), proc->buffer_sizes[0]);
 				}
 			}
 			inline void barrier_proc_buffers(barrier &b, vk::AccessFlags from, vk::AccessFlags to,

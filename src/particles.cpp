@@ -10,11 +10,13 @@ static glm::vec2 randuv() { f32 a = randf() * glm::pi<f32>() * 2; return {glm::c
 
 struct cw_push { u32 pcount; };
 struct sweep_push { u32 invocs; u32 off; };
-struct update_push { u32 pcount; };
+struct density_push { u32 pcount; };
+struct update_push { u32 pcount; f32 global_density; f32 stiffness; };
 
 struct particle_id {
 	alignas(16) glm::vec2 pos;
 	alignas(4) u32 id;
+	alignas(4) f32 density;
 };
 
 particles::particles(const rend::context &ctx, const vk::raii::Device &device,
@@ -22,7 +24,7 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	std::vector<particle> particle_data(compile_options::particle_count);
 	for (u32 i = 0; i < compile_options::particle_count; i++) {
 		particle_data[i].pos = randv() * glm::fvec2{compile_options::cells_x, compile_options::cells_y};
-		particle_data[i].vel = randuv() / 60.f;
+		particle_data[i].vel = randuv() / 1000.f;
 	}
 	static constexpr u32 cell_buff_size = cell_count_ceil+(std::popcount(cell_count)==1?1:0);
 	proc.set_main_buffer(particle_data, vk::BufferUsageFlagBits::eVertexBuffer);
@@ -32,9 +34,9 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	for (u32 i = 0; i < sim_frames; i++) {
 		ctx.set_object_name(device, *proc.main_buffer[i], ("particle main buffer #"+std::to_string(i)).c_str());
 	}
-	ctx.set_object_name(device, *proc.proc_buffers[counts_buff-1], "particle counts buffer");
-	ctx.set_object_name(device, *proc.proc_buffers[index_buff-1], "particle index buffer");
-	ctx.set_object_name(device, *proc.proc_buffers[cell_buff-1], "particle cell buffer");
+	ctx.set_object_name(*device, *proc.proc_buffers[counts_buff-1], "particle counts buffer");
+	ctx.set_object_name(*device, *proc.proc_buffers[index_buff-1], "particle index/density buffer");
+	ctx.set_object_name(*device, *proc.proc_buffers[cell_buff-1], "particle cell buffer");
 
 	logs::infoln("particles", compile_options::particle_count, " max particles, ", cell_count, " cells");
 	logs::infoln("particles", "counts buffer has ", cell_buff_size, " entries");
@@ -43,7 +45,14 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	proc.add_proc_buffer_pipeline<sweep_push>(dpool, "./shaders/upsweep.comp.spv", {counts_buff});
 	proc.add_proc_buffer_pipeline<sweep_push>(dpool, "./shaders/downsweep.comp.spv", {counts_buff});
 	proc.add_main_buffer_pipeline<cw_push>(dpool, "./shaders/write.comp.spv", {counts_buff, index_buff, cell_buff}, 1);
+	proc.add_main_buffer_pipeline<density_push>(dpool, "./shaders/density.comp.spv", {counts_buff, index_buff, cell_buff}, 1);
 	proc.add_main_buffer_pipeline<update_push>(dpool, "./shaders/update.comp.spv", {counts_buff, cell_buff}, 2);
+	ctx.set_object_name(*device, *proc.pipelines[count_pl].pipeline, "particle count pipeline");
+	ctx.set_object_name(*device, *proc.pipelines[upsweep_pl].pipeline, "particle upsweep pipeline");
+	ctx.set_object_name(*device, *proc.pipelines[downsweep_pl].pipeline, "particle downsweep pipeline");
+	ctx.set_object_name(*device, *proc.pipelines[write_pl].pipeline, "particle write pipeline");
+	ctx.set_object_name(*device, *proc.pipelines[density_pl].pipeline, "particle density pipeline");
+	ctx.set_object_name(*device, *proc.pipelines[update_pl].pipeline, "particle update pipeline");
 }
 
 void particles::step(vk::CommandBuffer cmd, u32 frame) {
@@ -96,7 +105,16 @@ void particles::step(vk::CommandBuffer cmd, u32 frame) {
 	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::shader_r, {cell_buff});
 	});
-	p.bind_dispatch(update_pl, update_push{compile_options::particle_count}, pkernel);
+	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
+		p.barrier_main_buffer(b, rend::barrier::shader_r, rend::barrier::shader_rw, {0});
+		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::shader_rw, {cell_buff});
+	});
+	p.bind_dispatch(density_pl, cw_push{compile_options::particle_count}, pkernel);
+	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
+		p.barrier_main_buffer(b, rend::barrier::shader_rw, rend::barrier::shader_r, {0});
+		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::shader_r, {cell_buff});
+	});
+	p.bind_dispatch(update_pl, update_push{compile_options::particle_count, .5f, .0005f}, pkernel);
 }
 u32 particles::pframe() const { return u32(proc.frame); }
 vk::Buffer particles::particle_buff() const { return *proc.main_buffer[proc.frame]; }

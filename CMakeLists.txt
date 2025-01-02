@@ -5,7 +5,7 @@ option(VULKAN_VALIDATION "vulkan validation layers" ON)
 option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader info messages" ON)
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
 set(FRAMES_IN_FLIGHT 2)
-set(PARTICLE_COUNT 256)
+set(PARTICLE_COUNT 512)
 set(CELLS_X 10)
 set(CELLS_Y 10)
 set(WINDOW_CALLBACK_GENERATOR "on_##name")
@@ -56,7 +56,7 @@ endfunction()
 configure_file(${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl.in ${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl)
 add_shaders(sh ${CMAKE_SOURCE_DIR}/src/shaders/count.comp ${CMAKE_SOURCE_DIR}/src/shaders/upsweep.comp
 	${CMAKE_SOURCE_DIR}/src/shaders/downsweep.comp ${CMAKE_SOURCE_DIR}/src/shaders/write.comp
-	${CMAKE_SOURCE_DIR}/src/shaders/update.comp
+	${CMAKE_SOURCE_DIR}/src/shaders/density.comp ${CMAKE_SOURCE_DIR}/src/shaders/update.comp
 	${CMAKE_SOURCE_DIR}/src/shaders/particle.vert ${CMAKE_SOURCE_DIR}/src/shaders/particle.frag)
 configure_file(${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp.in ${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp)
 add_executable(mikrosim

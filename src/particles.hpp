@@ -5,12 +5,13 @@
 struct particle {
 	alignas(16) glm::vec2 pos;
 	alignas(4) u32 debug_tags;
+	alignas(4) f32 density;
 	alignas(16) glm::vec2 vel;
 };
 
 class particles {
 public:
-	constexpr static u32 sim_frames = 3;
+	constexpr static u32 sim_frames = compile_options::frames_in_flight + 1;
 	constexpr static u32 cell_count = compile_options::cells_x * compile_options::cells_y;
 private:
 	constexpr static u32 cell_count_ceil = std::bit_ceil(cell_count);
@@ -23,7 +24,8 @@ private:
 	constexpr static u32 upsweep_pl = 1;
 	constexpr static u32 downsweep_pl = 2;
 	constexpr static u32 write_pl = 3;
-	constexpr static u32 update_pl = 4;
+	constexpr static u32 density_pl = 4;
+	constexpr static u32 update_pl = 5;
 
 	rend::basic_compute_process<sim_frames> proc;
 public:

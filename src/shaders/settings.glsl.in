@@ -1,11 +1,13 @@
 struct particle {
 	vec2 pos;
 	uint debug_tags;
+	float density;
 	vec2 vel;
 };
 struct particle_id {
 	vec2 pos;
 	uint id;
+	float density;
 };
 const uint CELLS_X = ${CELLS_X};
 const uint CELLS_Y = ${CELLS_Y};

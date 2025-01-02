@@ -21,11 +21,11 @@ layout(std140, set=0, binding=3) writeonly buffer cell_t {
 void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
 	if (particle_id < push.pcount) {
-		vec2 pos = particles.data[particle_id].pos;
-		uvec2 cell = uvec2(pos);
+		vec2 adj_pos = particles.data[particle_id].pos + particles.data[particle_id].vel * .5f;
+		uvec2 cell = uvec2(adj_pos);
 		uint cell_id = cell.x + cell.y * CELLS_X;
 		uint sorted_pos = counts.data[cell_id] + indices.data[particle_id];
-		cells.data[sorted_pos].pos = pos;
+		cells.data[sorted_pos].pos = adj_pos;
 		cells.data[sorted_pos].id = particle_id;
 	}
 }

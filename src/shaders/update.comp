@@ -4,6 +4,8 @@
 layout(local_size_x=64) in;
 layout(push_constant) uniform push_t {
 	uint pcount;
+	float global_density;
+	float stiffness;
 } push;
 layout(std140, set=0, binding=0) readonly buffer particles_t {
 	particle data[];
@@ -20,9 +22,14 @@ layout(std140, set=0, binding=3) readonly buffer cell_t {
 
 const vec2 MAX_SPEED = vec2(0.1, 0.1);
 
-float force(float dist) {
-	float x = dist - 1;
-	return 0.01 * x * x * (4 - 1 / dist);
+float density_contribution_derivation(float dist) {
+	const float c = -6 / 3.14159265358979323;
+	float x = 1 - dist;
+	return x * x * c; // <- D[2/pi * (1-x)^3,x]
+}
+
+float force(float dist, float density) {
+	return (density - push.global_density) * push.stiffness * density_contribution_derivation(dist) / dist;
 }
 
 void main() {
@@ -30,7 +37,9 @@ void main() {
 	if (particle_id < push.pcount) {
 		vec2 pos = particles.data[particle_id].pos;
 		vec2 vel = particles.data[particle_id].vel;
-		uvec2 cell = uvec2(pos);
+		vec2 adj_pos = pos + vel * .5;
+		float sd = particles.data[particle_id].density;
+		uvec2 cell = uvec2(adj_pos);
 		uint cell_id = cell.x + cell.y * CELLS_X;
 		uint left_cell_id = (cell.x == 0 ? cell_id : cell_id - 1);
 		uint right_cell_id = (cell.x == CELLS_X-1 ? cell_id : cell_id + 1);
@@ -41,32 +50,32 @@ void main() {
 		uvec2 bot_range = (cell.y == CELLS_Y-1 ? uvec2(0, 0) :
 			uvec2(counts.data[left_cell_id+CELLS_X], counts.data[right_cell_id+CELLS_X+1]));
 
-		uint terminator = 64;
+		uint terminator = 128;
 		for (uint i = top_range.x; i < top_range.y; i++) {
-			vec2 rp = cells.data[i].pos - pos;
+			vec2 rp = cells.data[i].pos - adj_pos;
 			float len = max(length(rp), 0.0001);
 			if (len < 1.0) {
-				vel += rp * force(len);
+				vel += rp * force(len, (sd + cells.data[i].density) * .5);
 			}
 			if (terminator < 1)
 				break;
 			terminator--;
 		}
 		for (uint i = mid_range.x; i < mid_range.y; i++) {
-			vec2 rp = cells.data[i].pos - pos;
+			vec2 rp = cells.data[i].pos - adj_pos;
 			float len = max(length(rp), 0.0001);
 			if (len < 1.0) { // since rp is 0 when interacting with itself, there's no need to check for it
-				vel += rp * force(len);
+				vel += rp * force(len, (sd + cells.data[i].density) * .5);
 			}
 			if (terminator < 1)
 				break;
 			terminator--;
 		}
 		for (uint i = bot_range.x; i < bot_range.y; i++) {
-			vec2 rp = cells.data[i].pos - pos;
+			vec2 rp = cells.data[i].pos - adj_pos;
 			float len = max(length(rp), 0.0001);
 			if (len < 1.0) {
-				vel += rp * force(len);
+				vel += rp * force(len, (sd + cells.data[i].density) * .5);
 			}
 			if (terminator < 1)
 				break;
