@@ -139,7 +139,7 @@ print = _print
 if "--arr-for-inj" in sys.argv[1:]:
 	# where std::embed? :(
 	if len(out) >= 65536: # MSVC, why are you like this :(
-		print("constexpr u8 ascii_font_atlas[] = {")
+		print("static constexpr u8 ascii_font_atlas[] = {")
 		buff = "\t"
 		for b in out:
 			buff += f"{b},"
@@ -149,17 +149,17 @@ if "--arr-for-inj" in sys.argv[1:]:
 		if len(buff) > 1:
 			print(buff)
 		print("};")
-		print(f"constexpr usize ascii_font_atlas_bytes = {len(out)};")
+		print(f"static constexpr usize ascii_font_atlas_bytes = {len(out)};")
 		print("#define ascii_font_atlas_header reinterpret_cast<const format::qoi::header *>(ascii_font_atlas)")
 		print("#define ascii_font_atlas_data ascii_font_atlas+14")
 	else:
-		print("constexpr const char *ascii_font_atlas_str =")
+		print("static constexpr const char *ascii_font_atlas_str =")
 		print("\t"+cstr(out, 160)+";")
 		print("#define ascii_font_atlas reinterpret_cast<const u8 *>(ascii_font_atlas_str)")
-		print(f"constexpr usize ascii_font_atlas_bytes = {len(out)};")
+		print(f"static constexpr usize ascii_font_atlas_bytes = {len(out)};")
 		print("#define ascii_font_atlas_header reinterpret_cast<const format::qoi::header *>(ascii_font_atlas_str)")
 		print("#define ascii_font_atlas_data reinterpret_cast<const u8 *>(ascii_font_atlas_str+14)")
-	print(f"constexpr usize ascii_font_atlas_data_bytes = {len(out)-14};")
-	print("constexpr const char *ascii_char_info =")
+	print(f"static constexpr usize ascii_font_atlas_data_bytes = {len(out)-14};")
+	print("static constexpr const char *ascii_char_info =")
 	print("\t"+cstr(ciout, 160)+";")
-	print(f"constexpr usize ascii_char_info_count = 128;",end="")
+	print(f"static constexpr usize ascii_char_info_count = 128;",end="")

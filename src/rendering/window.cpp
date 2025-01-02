@@ -122,15 +122,15 @@ namespace rend {
 	glm::dvec2 window::get_cursor_pos() const { glm::dvec2 out; glfwGetCursorPos(window_handle, &out.x, &out.y); return out; }
 
 	void window::create(const char *title) {
-		window_handle = glfwCreateWindow(wwidth, wheight, title, NULL, NULL);
+		window_handle = glfwCreateWindow(i32(wwidth), i32(wheight), title, NULL, NULL);
 		if (!window_handle) {
 			logs::errorln("window", "Couldn't create window!");
 			throw std::runtime_error("window creation failed");
 		}
 		glfwSetFramebufferSizeCallback(window_handle, [](GLFWwindow *w, int width, int height) {
 			window *this_ = reinterpret_cast<window *>(glfwGetWindowUserPointer(w));
-			this_->wwidth = width;
-			this_->wheight = height;
+			this_->wwidth = u32(width);
+			this_->wheight = u32(height);
 			this_->swapchain_outdated = true;
 		});
 		glfwSetWindowUserPointer(window_handle, this);

@@ -1,5 +1,4 @@
 #include "buffers.hpp"
-#include <iomanip>
 #include "device.hpp"
 
 namespace rend {
@@ -24,15 +23,16 @@ namespace rend {
 	}
 	void replace_buffer::update_keep() {
 		for (i32 i = compile_options::frames_in_flight - 1; i > 0; i--) {
-			old[i] = std::move(old[i-1]);
+			old[usize(i)] = std::move(old[usize(i-1)]);
 		}
 	}
 	void replace_simple_mesh::update_keep() { replace_buffer::update_keep(); }
 	void replace_simple_mesh::bind_draw(vk::CommandBuffer command_buffer) const {
 		command_buffer.bindVertexBuffers(0, { *buff }, { 0 });
-		command_buffer.draw(vertc, 1, 0, 0);
+		command_buffer.draw(u32(vertc), 1, 0, 0);
 	}
-	void replace_simple_mesh::draw(vk::CommandBuffer command_buffer) const { command_buffer.draw(vertc, 1, 0, 0); }
+	void replace_simple_mesh::draw(vk::CommandBuffer command_buffer) const {
+		command_buffer.draw(u32(vertc), 1, 0, 0); }
 	vk::Buffer replace_simple_mesh::get_old(usize age) const { return *old[age]; }
 	vk::Buffer replace_simple_mesh::operator*() const { return *buff; }
 	VmaAllocation replace_simple_mesh::operator~() const { return ~buff; }
@@ -143,7 +143,7 @@ namespace rend {
 			{
 				rend::autocommand cmd(device, command_pool, transfer_queue);
 				cmd.copyBuffer(*buff_stage, *buff, { {0, 0, size} });
-			};
+			}
 			return buff;
 		} else {
 			vma::buffer buff = CONSTANTAN_DEVICE_BUFFER_MAKE_FROM_ARGS(, vma::allocation_create_flag_bits::eHostAccessSequentialWrite, vma::memory_usage::eAuto);
@@ -169,7 +169,7 @@ namespace rend {
 			cmd.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTopOfPipe, {}, {}, {},
 				{{vk::AccessFlagBits::eTransferWrite, {}, vk::ImageLayout::eTransferDstOptimal, final_layout,
 					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, *img, vk::ImageSubresourceRange{img_subres_layers.aspectMask, 0, mip_levels, 0, array_layers}}});
-		};
+		}
 		return img;
 	}
 	const vk::raii::Device &buffer_handler::get_device() const { return device; }

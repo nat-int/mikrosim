@@ -7,7 +7,7 @@
 #include "window.hpp"
 
 namespace rend {
-	template<typename T> void set_object_name(const vk::DispatchLoaderDynamic &dispatcher, vk::Device device, T object, const char *name) {
+	template<typename T> void set_object_name(const vk::detail::DispatchLoaderDynamic &dispatcher, vk::Device device, T object, const char *name) {
 		if constexpr (compile_options::vulkan_validation) {
 			device.setDebugUtilsObjectNameEXT({T::objectType,reinterpret_cast<uint64_t>(static_cast<T::CType>(object)), name}, dispatcher);
 		}
@@ -40,7 +40,7 @@ namespace rend {
 		window make_window(u32 width, u32 height, const char *title);
 		inline const vk::Instance &vulkan_instance() const { return *vk_instance; }
 		inline const vk::raii::Instance &vulkan_instance_raii() const { return vk_instance; }
-		inline const vk::DispatchLoaderDynamic &vulkan_dynamic_dispatcher() const { return dynamic_dispatcher; }
+		inline const vk::detail::DispatchLoaderDynamic &vulkan_dynamic_dispatcher() const { return dynamic_dispatcher; }
 		template<typename F> inline physical_device_info select_physical_device(F heuristic) { return rend::select_physical_device(vk_instance, heuristic); }
 		template<typename QueueFinder, typename F, typename FQE> inline physical_device_info select_physical_device_with_queues(F heuristic, vk::SurfaceKHR surface, FQE queue_extractor) const {
 			return rend::select_physical_device_with_queues<QueueFinder>(vk_instance, heuristic, surface, queue_extractor);
@@ -57,7 +57,7 @@ namespace rend {
 		std::vector<const char *> enabled_vulkan_layers;
 		vk::raii::Instance vk_instance;
 		vk::raii::DebugUtilsMessengerEXT vk_debug_utils_messenger;
-		vk::DispatchLoaderDynamic dynamic_dispatcher;
+		vk::detail::DispatchLoaderDynamic dynamic_dispatcher;
 	};
 	template<typename T> inline void namer::operator()(T object, const char *name) const {
 		rend::set_object_name(ctx.dynamic_dispatcher, device, object, name);

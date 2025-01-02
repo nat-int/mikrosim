@@ -1,0 +1,19 @@
+#version 450
+layout(local_size_x=64) in;
+layout(push_constant) uniform push_t {
+	uint invocs;
+	uint off;
+} push;
+layout(std140, set=0, binding=0) buffer counts_t {
+	uint data[];
+} counts;
+
+void main() {
+	uint invoc = gl_GlobalInvocationID.x;
+	if (invoc < push.invocs) {
+		uint li = push.off * (2 * invoc + 1) - 1;
+		uint hi = push.off * (2 * invoc + 2) - 1;
+		counts.data[hi] += counts.data[li];
+	}
+}
+

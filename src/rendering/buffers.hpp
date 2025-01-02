@@ -94,9 +94,9 @@ namespace rend {
 	class fake_stager : public dyn_stager {
 	public:
 		using dyn_stager::dyn_stager;
-		void prepare(u32 frame=0);
-		void upload_buffer(const vma::buffer &target, dsize at, const void *data, usize size, u32 frame=0);
-		void commit(vk::CommandBuffer command_buffer, u32 frame=0);
+		void prepare(u32 frame=0) override;
+		void upload_buffer(const vma::buffer &target, dsize at, const void *data, usize size, u32 frame=0) override;
+		void commit(vk::CommandBuffer command_buffer, u32 frame=0) override;
 	};
 	class multi_stager_frame {
 	public:
@@ -128,9 +128,9 @@ namespace rend {
 		constexpr static usize framec = compile_options::frames_in_flight + 1;
 
 		using dyn_stager::dyn_stager;
-		void prepare(u32 frame=0);
-		void upload_buffer(const vma::buffer &target, dsize at, const void *data, usize size, u32 frame=0);
-		void commit(vk::CommandBuffer command_buffer, u32 frame=0);
+		void prepare(u32 frame=0) override;
+		void upload_buffer(const vma::buffer &target, dsize at, const void *data, usize size, u32 frame=0) override;
+		void commit(vk::CommandBuffer command_buffer, u32 frame=0) override;
 	private:
 		std::array<multi_stager_frame, framec> frames;
 	};
@@ -139,9 +139,9 @@ namespace rend {
 		constexpr static usize framec = compile_options::frames_in_flight + 1;
 
 		using dyn_stager::dyn_stager;
-		void prepare(u32 frame=0);
-		void upload_buffer(const vma::buffer &target, dsize at, const void *data, usize size, u32 frame=0);
-		void commit(vk::CommandBuffer command_buffer, u32 frame=0);
+		void prepare(u32 frame=0) override;
+		void upload_buffer(const vma::buffer &target, dsize at, const void *data, usize size, u32 frame=0) override;
+		void commit(vk::CommandBuffer command_buffer, u32 frame=0) override;
 	private:
 		std::array<multi_stager_frame_synced, framec> frames;
 	};
@@ -197,7 +197,7 @@ namespace rend {
 			u32 array_layers=1, vk::ImageCreateFlags create_flags={}, vk::SampleCountFlagBits samples=vk::SampleCountFlagBits::e1,
 			vk::ImageTiling tiling=vk::ImageTiling::eOptimal, vk::ImageType image_type=vk::ImageType::e2D,
 			vk::SharingMode sharing_mode=vk::SharingMode::eExclusive, const vk::ArrayProxyNoTemporaries<const u32> &queues={}) const {
-			return make_device_image_dedicated_stage(data.data(), data.size() * sizeof(data[0]), usage, image_extent, img_subres_layers, image_format, final_layout,
+			return make_device_image_dedicated_stage(data.data(), u32(data.size() * sizeof(data[0])), usage, image_extent, img_subres_layers, image_format, final_layout,
 				mip_levels, array_layers, create_flags, samples, tiling, image_type, sharing_mode, queues);
 		}
 		const vk::raii::Device &get_device() const;

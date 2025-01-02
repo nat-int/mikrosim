@@ -153,7 +153,7 @@ constexpr unsigned int shader_count = 5;
 			vk::SamplerAddressMode::eClampToBorder, vk::SamplerAddressMode::eClampToBorder, vk::SamplerAddressMode::eClampToBorder, 0.f, false, 0.f, false});
 		ctx.set_object_name(*device, *linear_sampler, "2d renderer linear sampler");
 		ctx.set_object_name(*device, *nearest_sampler, "2d renderer nearest sampler");
-		resize(width, height);
+		resize(f32(width), f32(height));
 	}
 	void renderer2d::push_projection(vk::CommandBuffer cmds, const glm::mat4 &proj) const {
 		cmds.pushConstants(*solid_pipeline_layout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &proj);
@@ -201,7 +201,7 @@ constexpr unsigned int shader_count = 5;
 	std::ostream &operator<<(std::ostream &os, const vertex2d &v) {
 		os << "vertex(" << glm::to_string(v.position) << ", uv " << glm::to_string(v.uv) << ", ~#";
 		for (usize i = 0; i < 4; i++) {
-			u8 c = u8(v.color[i] * 255);
+			u8 c = u8(v.color[i32(i)] * 255);
 			os << hex_chars[c / 16] << hex_chars[c % 16];
 		}
 		os << ")";

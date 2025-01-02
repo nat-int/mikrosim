@@ -57,6 +57,7 @@ namespace rend {
 			case vk::PhysicalDeviceType::eIntegratedGpu: return {4,"integrated gpu"};
 			case vk::PhysicalDeviceType::eVirtualGpu: return {3,"virtual gpu"};
 			case vk::PhysicalDeviceType::eCpu: return {2,"cpu"};
+			case vk::PhysicalDeviceType::eOther:
 			default: return {1,"unknown device type"};
 			}
 		}

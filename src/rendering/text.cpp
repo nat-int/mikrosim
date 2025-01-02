@@ -2,7 +2,7 @@
 
 namespace rend {
 /*[INJ_MARK](ascii_font_atlas){*/
-constexpr const char *ascii_font_atlas_str =
+static constexpr const char *ascii_font_atlas_str =
 	"qoif\200\0\0\0\200\0\0\0\4\1\377\0\0\0\0\302n\376\0\201\0\376\0\244\0\376\0$\0\0\302Z\301\376\307\0\0\376q\0\0\376\33\0\0\376\0\0\62\376\0\0\205\376\0\0\366\300"
 	"#\36\21\23\25=\301z\311\376r\0\0\376\362\0\0=\304z\376\0{\0\376\0\373\0\244D\300'\376\0{\0\0\300\376\0\0{\376\0\0\373\240\214\300\35\376\0\0{\0f\304\376\0\362\0"
 	"\376\0r\0\0\300\376\0\0V\376\0\0\326\300\376\0\0V\0Z\302\376\326\0\0\376\240\0\0\376j\0\0\376\64\0\0\376\0\0R\376\0\0\305\376\0\0\332\376\0\0g9\313\21\66\376\0\0"
@@ -948,7 +948,7 @@ constexpr usize ascii_char_info_count = 128;
 		glm::vec2 bound1;
 		float width;
 	};
-	const char_info *ascii_char_info_retp = reinterpret_cast<const char_info *>(ascii_char_info);
+	static const char_info *ascii_char_info_retp = reinterpret_cast<const char_info *>(ascii_char_info);
 
 	void text::load_ascii_atlas(const buffer_handler &buff_handler) {
 		(void)ascii_font_atlas_bytes;

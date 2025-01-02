@@ -1,0 +1,26 @@
+#version 450
+#include "settings.glsl"
+
+layout(local_size_x=64) in;
+layout(push_constant) uniform push_t {
+	uint pcount;
+} push;
+layout(std140, set=0, binding=0) readonly buffer particles_t {
+	particle data[];
+} particles;
+layout(std140, set=0, binding=1) buffer counts_t {
+	uint data[];
+} counts;
+layout(std140, set=0, binding=2) writeonly buffer indices_t {
+	uint data[];
+} indices;
+
+void main() {
+	uint particle_id = gl_GlobalInvocationID.x;
+	if (particle_id < push.pcount) {
+		uvec2 cell = uvec2(particles.data[particle_id].pos);
+		uint cell_id = cell.x + cell.y * CELLS_X;
+		indices.data[particle_id] = atomicAdd(counts.data[cell_id], 1);
+	}
+}
+

@@ -4,25 +4,25 @@
 
 rw_lock::rw_lock() : readers(0), writer(false), writer_wait(false) {}
 void rw_lock::lockr() {
-	std::unique_lock lock(mut);
+	std::unique_lock<std::mutex> lock(mut);
 	reader_cond.wait(lock, [this] { return writer == 0 && writer_wait == 0; });
 	readers++;
 }
 void rw_lock::unlockr() {
-	std::lock_guard lock(mut);
+	std::lock_guard<std::mutex> lock(mut);
 	if (--readers == 0 && writer_wait) {
 		writer_cond.notify_one();
 	}
 }
 void rw_lock::lockw() {
-	std::unique_lock lock(mut);
+	std::unique_lock<std::mutex> lock(mut);
 	writer_wait = true;
 	writer_cond.wait(lock, [this] { return readers == 0 && !writer; });
 	writer = true;
 	writer_wait = false;
 }
 void rw_lock::unlockw() {
-	std::lock_guard lock(mut);
+	std::lock_guard<std::mutex> lock(mut);
 	writer = false;
 	reader_cond.notify_all();
 	writer_cond.notify_one();
@@ -32,23 +32,23 @@ std::string utf32_to_utf8(std::u32string_view s) {
 	for (char32_t cc : s) {
 		u32 c = cc;
 		if (c < 0x80) {
-			out.push_back(c);
+			out.push_back(char(c));
 		} else if (c < 0x800) {
-			out.push_back(u8(0xc0 | c >> 6));
-			out.push_back(u8(0x80 | (c & 0x3f)));
+			out.push_back(char(u8(0xc0 | c >> 6)));
+			out.push_back(char(u8(0x80 | (c & 0x3f))));
 		} else if (c < 0x10000) {
-			out.push_back(u8(0xe0 | c >> 12));
-			out.push_back(u8(0x80 | (c >> 6 & 0x3f)));
-			out.push_back(u8(0x80 | (c & 0x3f)));
+			out.push_back(char(u8(0xe0 | c >> 12)));
+			out.push_back(char(u8(0x80 | (c >> 6 & 0x3f))));
+			out.push_back(char(u8(0x80 | (c & 0x3f))));
 		} else {
-			u32 ip = out.size();
+			u32 ip = u32(out.size());
 			u8 bl = 5;
 			while (c >> bl) {
-				out.insert(ip, 1, u8(0x80 | (c & 0x3f)));
+				out.insert(ip, 1, char(u8(0x80 | (c & 0x3f))));
 				c >>= 6;
 				bl--;
 			}
-			out.insert(ip, 1, u8(0xff << (bl+1) | c));
+			out.insert(ip, 1, char(u8(0xffu << (bl+1) | c)));
 		}
 	}
 	return out;
@@ -56,7 +56,8 @@ std::string utf32_to_utf8(std::u32string_view s) {
 std::u32string utf8_to_utf32(std::string_view s) {
 	std::u32string out; out.reserve(s.size() / 2);
 	u32 buf = 0;
-	for (u8 c : s) {
+	for (char _c : s) {
+		u8 c = u8(_c);
 		if (c < 0x80) {
 			if (buf) {
 				out.push_back(buf);
@@ -64,7 +65,7 @@ std::u32string utf8_to_utf32(std::string_view s) {
 			}
 			out.push_back(c);
 		} else {
-			u8 bl = std::countl_one(c);
+			u8 bl = u8(std::countl_one(c));
 			buf = buf << (7 - bl) | ((0xff >> bl) & c);
 		}
 	}

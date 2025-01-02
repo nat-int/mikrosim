@@ -1,0 +1,87 @@
+#version 450
+#include "settings.glsl"
+
+layout(local_size_x=64) in;
+layout(push_constant) uniform push_t {
+	uint pcount;
+} push;
+layout(std140, set=0, binding=0) readonly buffer particles_t {
+	particle data[];
+} particles;
+layout(std140, set=0, binding=1) writeonly buffer particles_next_t {
+	particle data[];
+} particles_next;
+layout(std140, set=0, binding=2) readonly buffer counts_t {
+	uint data[];
+} counts;
+layout(std140, set=0, binding=3) readonly buffer cell_t {
+	particle_id data[];
+} cells;
+
+const vec2 MAX_SPEED = vec2(0.1, 0.1);
+
+float force(float dist) {
+	float x = dist - 1;
+	return 0.01 * x * x * (4 - 1 / dist);
+}
+
+void main() {
+	uint particle_id = gl_GlobalInvocationID.x;
+	if (particle_id < push.pcount) {
+		vec2 pos = particles.data[particle_id].pos;
+		vec2 vel = particles.data[particle_id].vel;
+		uvec2 cell = uvec2(pos);
+		uint cell_id = cell.x + cell.y * CELLS_X;
+		uint left_cell_id = (cell.x == 0 ? cell_id : cell_id - 1);
+		uint right_cell_id = (cell.x == CELLS_X-1 ? cell_id : cell_id + 1);
+
+		uvec2 top_range = (cell.y == 0 ? uvec2(0, 0) :
+			uvec2(counts.data[left_cell_id-CELLS_X], counts.data[right_cell_id-CELLS_X+1]));
+		uvec2 mid_range = uvec2(counts.data[left_cell_id], counts.data[right_cell_id+1]);
+		uvec2 bot_range = (cell.y == CELLS_Y-1 ? uvec2(0, 0) :
+			uvec2(counts.data[left_cell_id+CELLS_X], counts.data[right_cell_id+CELLS_X+1]));
+
+		uint terminator = 64;
+		for (uint i = top_range.x; i < top_range.y; i++) {
+			vec2 rp = cells.data[i].pos - pos;
+			float len = max(length(rp), 0.0001);
+			if (len < 1.0) {
+				vel += rp * force(len);
+			}
+			if (terminator < 1)
+				break;
+			terminator--;
+		}
+		for (uint i = mid_range.x; i < mid_range.y; i++) {
+			vec2 rp = cells.data[i].pos - pos;
+			float len = max(length(rp), 0.0001);
+			if (len < 1.0) { // since rp is 0 when interacting with itself, there's no need to check for it
+				vel += rp * force(len);
+			}
+			if (terminator < 1)
+				break;
+			terminator--;
+		}
+		for (uint i = bot_range.x; i < bot_range.y; i++) {
+			vec2 rp = cells.data[i].pos - pos;
+			float len = max(length(rp), 0.0001);
+			if (len < 1.0) {
+				vel += rp * force(len);
+			}
+			if (terminator < 1)
+				break;
+			terminator--;
+		}
+
+		vel = clamp(vel, -MAX_SPEED, MAX_SPEED);
+		pos += vel;
+		if (pos.x > CELLS_X) { pos.x = 2*CELLS_X - pos.x; vel.x = -vel.x; }
+		if (pos.x < 0) { pos.x = -pos.x; vel.x = -vel.x; }
+		if (pos.y > CELLS_Y) { pos.y = 2*CELLS_Y - pos.y; vel.y = -vel.y; }
+		if (pos.y < 0) { pos.y = -pos.y; vel.y = -vel.y; }
+		particles_next.data[particle_id].pos = pos + vel;
+		particles_next.data[particle_id].vel = vel;
+		particles_next.data[particle_id].debug_tags = counts.data[cell_id];
+	}
+}
+

@@ -5,7 +5,11 @@ option(VULKAN_VALIDATION "vulkan validation layers" ON)
 option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader info messages" ON)
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
 set(FRAMES_IN_FLIGHT 2)
+set(PARTICLE_COUNT 256)
+set(CELLS_X 10)
+set(CELLS_Y 10)
 set(WINDOW_CALLBACK_GENERATOR "on_##name")
+
 if(VULKAN_VALIDATION)
 	set(VULKAN_VALIDATION 1)
 else()
@@ -42,15 +46,22 @@ function(add_shaders SHADER_TARGET)
 		add_custom_command(
 			COMMAND ${glslc_executable} -o ${SHADER_BINARY_DIR}/${FILENAME}.spv ${source}
 			OUTPUT ${SHADER_BINARY_DIR}/${FILENAME}.spv
-			DEPENDS ${source} ${SHADER_BINARY_DIR}
+			DEPENDS ${source} ${SHADER_BINARY_DIR} ${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl
 			COMMENT "Compiling shader ${source}")
 		list(APPEND SPV_SHADERS ${SHADER_BINARY_DIR}/${FILENAME}.spv)
 	endforeach()
 	add_custom_target(${SHADER_TARGET} ALL DEPENDS ${SPV_SHADERS})
 endfunction()
 
+configure_file(${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl.in ${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl)
+add_shaders(sh ${CMAKE_SOURCE_DIR}/src/shaders/count.comp ${CMAKE_SOURCE_DIR}/src/shaders/upsweep.comp
+	${CMAKE_SOURCE_DIR}/src/shaders/downsweep.comp ${CMAKE_SOURCE_DIR}/src/shaders/write.comp
+	${CMAKE_SOURCE_DIR}/src/shaders/update.comp
+	${CMAKE_SOURCE_DIR}/src/shaders/particle.vert ${CMAKE_SOURCE_DIR}/src/shaders/particle.frag)
 configure_file(${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp.in ${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp)
-add_executable(mikrosim ${CMAKE_SOURCE_DIR}/src/main.cpp ${CMAKE_SOURCE_DIR}/src/app.cpp
+add_executable(mikrosim
+	${CMAKE_SOURCE_DIR}/src/main.cpp
+		${CMAKE_SOURCE_DIR}/src/app.cpp ${CMAKE_SOURCE_DIR}/src/particles.cpp
 	${CMAKE_SOURCE_DIR}/src/rendering/window.cpp ${CMAKE_SOURCE_DIR}/src/rendering/context.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/device.cpp ${CMAKE_SOURCE_DIR}/src/rendering/pipeline.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/vma_wrap.cpp ${CMAKE_SOURCE_DIR}/src/rendering/2d.cpp
@@ -67,11 +78,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 	target_compile_options(mikrosim PUBLIC -Wall -Wextra -Wpedantic -Wno-class-memaccess)
 	target_compile_options(mikrosim PRIVATE -fdiagnostics-color=always)
 endif()
-if(CMAKE_CXX_COMPILER_ID STREQUAL "CLANG")
-	target_compile_options(mikrosim PUBLIC -Weverything -Wno-c++98-compat-pedantic)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	target_compile_options(mikrosim PUBLIC -Weverything -Wno-c++98-compat-pedantic -Wno-shadow-field-in-constructor -Wno-padded -Wno-c++20-compat -Wno-shadow -Wno-unsafe-buffer-usage -Wno-covered-switch-default)
 	target_compile_options(mikrosim PRIVATE -fcolor-diagnostics)
 endif()
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "CLANG")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	if(CONFIG STREQUAL "Debug")
 		target_compile_options(mikrosim PRIVATE -fsanitize=undefined)
 		target_link_options(mikrosim PRIVATE -fsanitize=undefined)

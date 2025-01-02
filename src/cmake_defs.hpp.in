@@ -15,6 +15,9 @@ namespace compile_options {
 	constexpr bool vulkan_validation_supress_loader_info = ${VULKAN_VALIDATION_SUPRESS_LOADER_INFO};
 	constexpr bool vulkan_validation_abort = ${VULKAN_VALIDATION_ABORT};
 	constexpr u32 frames_in_flight = ${FRAMES_IN_FLIGHT};
+	constexpr u32 particle_count = ${PARTICLE_COUNT};
+	constexpr u32 cells_x = ${CELLS_X};
+	constexpr u32 cells_y = ${CELLS_Y};
 #define WINDOW_CALLBACK_GENERATOR(name) ${WINDOW_CALLBACK_GENERATOR}
 }
 

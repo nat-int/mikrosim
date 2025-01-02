@@ -70,4 +70,37 @@ namespace rend {
 			&viewport_state, &rasterization_state, &multisample_state, depth_stencil_state ? &*depth_stencil_state : nullptr, &blend_state, &dynamic_state,
 			layout, render_pass, subpass, base, base_index };
 	}
+
+
+	basic_compute_pipeline::basic_compute_pipeline() : shader(nullptr), dsl(nullptr), layout(nullptr),
+		pipeline(nullptr) { }
+	void basic_compute_pipeline::bind(vk::CommandBuffer cmd) const {
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
+	}
+	void basic_compute_pipeline::bind_ds(vk::CommandBuffer cmd,
+		const std::vector<vk::DescriptorSet> &ds) const {
+		cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, layout, 0, ds, {});
+	}
+	void basic_compute_pipeline::dispatch(vk::CommandBuffer cmd, u32 sx, u32 sy, u32 sz) const {
+		cmd.dispatch(sx, sy, sz);
+	}
+
+	barrier::barrier(vk::CommandBuffer cmd, vk::PipelineStageFlags from, vk::PipelineStageFlags to,
+		vk::DependencyFlags flags) :
+		cmd(cmd), from(from), to(to), flags(flags) { }
+	barrier::~barrier() {
+		cmd.pipelineBarrier(from, to, flags, {}, buffer_barriers, image_barriers);
+	}
+	void barrier::preset(vk::AccessFlags f, vk::AccessFlags t) {
+		preset_from = f;
+		preset_to = t;
+	}
+	void barrier::buff(vk::Buffer buff, vk::DeviceSize size, vk::DeviceSize offset) {
+		this->buff(preset_from, preset_to, buff, size, offset);
+	}
+	void barrier::buff(vk::AccessFlags from, vk::AccessFlags to, vk::Buffer buff,
+		vk::DeviceSize size, vk::DeviceSize offset) {
+		buffer_barriers.push_back({from, to, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+			buff, offset, size});
+	}
 }
