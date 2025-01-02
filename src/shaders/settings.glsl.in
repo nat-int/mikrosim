@@ -8,6 +8,7 @@ struct particle_id {
 	vec2 pos;
 	uint id;
 	float density;
+	vec2 vel;
 };
 const uint CELLS_X = ${CELLS_X};
 const uint CELLS_Y = ${CELLS_Y};

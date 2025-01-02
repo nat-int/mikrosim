@@ -11,12 +11,13 @@ static glm::vec2 randuv() { f32 a = randf() * glm::pi<f32>() * 2; return {glm::c
 struct cw_push { u32 pcount; };
 struct sweep_push { u32 invocs; u32 off; };
 struct density_push { u32 pcount; };
-struct update_push { u32 pcount; f32 global_density; f32 stiffness; };
+struct update_push { u32 pcount; f32 global_density; f32 stiffness; f32 viscosity; };
 
 struct particle_id {
 	alignas(16) glm::vec2 pos;
 	alignas(4) u32 id;
 	alignas(4) f32 density;
+	alignas(16) glm::vec2 vel;
 };
 
 particles::particles(const rend::context &ctx, const vk::raii::Device &device,
@@ -114,7 +115,7 @@ void particles::step(vk::CommandBuffer cmd, u32 frame) {
 		p.barrier_main_buffer(b, rend::barrier::shader_rw, rend::barrier::shader_r, {0});
 		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::shader_r, {cell_buff});
 	});
-	p.bind_dispatch(update_pl, update_push{compile_options::particle_count, .5f, .0005f}, pkernel);
+	p.bind_dispatch(update_pl, update_push{compile_options::particle_count, .5f, .0005f, 0.01f}, pkernel);
 }
 u32 particles::pframe() const { return u32(proc.frame); }
 vk::Buffer particles::particle_buff() const { return *proc.main_buffer[proc.frame]; }

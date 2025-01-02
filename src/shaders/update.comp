@@ -6,6 +6,7 @@ layout(push_constant) uniform push_t {
 	uint pcount;
 	float global_density;
 	float stiffness;
+	float viscosity;
 } push;
 layout(std140, set=0, binding=0) readonly buffer particles_t {
 	particle data[];
@@ -26,6 +27,10 @@ float density_contribution_derivation(float dist) {
 	const float c = -6 / 3.14159265358979323;
 	float x = 1 - dist;
 	return x * x * c; // <- D[2/pi * (1-x)^3,x]
+}
+float viscosity_contribution(float dist) { // there's no real reason to normalize it, it just feels nicer
+	const float c = 6 / 5 / 3.14159265358979323; // Integrate[(1-r^2)(1-r),{r,0,1},{a,0,2pi}]
+	return (1 - dist * dist) * (1 - dist) * c * push.viscosity;
 }
 
 float force(float dist, float density) {
@@ -53,9 +58,10 @@ void main() {
 		uint terminator = 128;
 		for (uint i = top_range.x; i < top_range.y; i++) {
 			vec2 rp = cells.data[i].pos - adj_pos;
-			float len = max(length(rp), 0.0001);
-			if (len < 1.0) {
-				vel += rp * force(len, (sd + cells.data[i].density) * .5);
+			float dist = max(length(rp), 0.0001);
+			if (dist < 1.0) {
+				vel += rp * force(dist, (sd + cells.data[i].density) * .5);
+				vel += viscosity_contribution(dist) * (cells.data[i].vel - vel);
 			}
 			if (terminator < 1)
 				break;
@@ -63,9 +69,10 @@ void main() {
 		}
 		for (uint i = mid_range.x; i < mid_range.y; i++) {
 			vec2 rp = cells.data[i].pos - adj_pos;
-			float len = max(length(rp), 0.0001);
-			if (len < 1.0) { // since rp is 0 when interacting with itself, there's no need to check for it
-				vel += rp * force(len, (sd + cells.data[i].density) * .5);
+			float dist = max(length(rp), 0.0001);
+			if (dist < 1.0) { // since rp is 0 when interacting with itself, there's no need to check for it
+				vel += rp * force(dist, (sd + cells.data[i].density) * .5);
+				vel += viscosity_contribution(dist) * (cells.data[i].vel - vel);
 			}
 			if (terminator < 1)
 				break;
@@ -73,9 +80,10 @@ void main() {
 		}
 		for (uint i = bot_range.x; i < bot_range.y; i++) {
 			vec2 rp = cells.data[i].pos - adj_pos;
-			float len = max(length(rp), 0.0001);
-			if (len < 1.0) {
-				vel += rp * force(len, (sd + cells.data[i].density) * .5);
+			float dist = max(length(rp), 0.0001);
+			if (dist < 1.0) {
+				vel += rp * force(dist, (sd + cells.data[i].density) * .5);
+				vel += viscosity_contribution(dist) * (cells.data[i].vel - vel);
 			}
 			if (terminator < 1)
 				break;
