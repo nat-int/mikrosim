@@ -92,10 +92,9 @@ void main() {
 
 		vel = clamp(vel, -MAX_SPEED, MAX_SPEED);
 		pos += vel;
-		if (pos.x < 2 && pos.y < 2) { vel += vec2(0.0001, 0); }
-		if (pos.x > CELLS_X - 3 && pos.y < 2) { vel += vec2(0, 0.0001); }
-		if (pos.x > CELLS_X - 3 && pos.y > CELLS_Y - 3) { vel += vec2(-0.0001, 0); }
-		if (pos.x < 2 && pos.y > CELLS_Y - 3) { vel += vec2(0, -0.0001); }
+		const vec2 center = vec2(CELLS_X * .5, CELLS_Y * .5);
+		vec2 center_offset = vec2(adj_pos - center);
+		vel += normalize(center_offset.yx * vec2(-1, 1) + center_offset) * 0.00001;
 		if (pos.x > CELLS_X) { pos.x = 2*CELLS_X - pos.x; vel.x = -vel.x; }
 		if (pos.x < 0) { pos.x = -pos.x; vel.x = -vel.x; }
 		if (pos.y > CELLS_Y) { pos.y = 2*CELLS_Y - pos.y; vel.y = -vel.y; }

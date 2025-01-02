@@ -55,7 +55,7 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	ctx.set_object_name(*device, *proc.pipelines[density_pl].pipeline, "particle density pipeline");
 	ctx.set_object_name(*device, *proc.pipelines[update_pl].pipeline, "particle update pipeline");
 
-	global_density = .5f;
+	global_density = 2.f;
 	stiffness = 5.f;
 	viscosity = 1.f;
 }
@@ -119,8 +119,8 @@ void particles::step(vk::CommandBuffer cmd, u32 frame) {
 		p.barrier_main_buffer(b, rend::barrier::shader_rw, rend::barrier::shader_r, {0});
 		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::shader_r, {cell_buff});
 	});
-	p.bind_dispatch(update_pl, update_push{compile_options::particle_count, global_density,
-		stiffness * .0001f, viscosity * .01f}, pkernel);
+	p.bind_dispatch(update_pl, update_push{compile_options::particle_count, global_density * .1f,
+		stiffness * .001f, viscosity * .01f}, pkernel);
 }
 u32 particles::pframe() const { return u32(proc.frame); }
 vk::Buffer particles::particle_buff() const { return *proc.main_buffer[proc.frame]; }

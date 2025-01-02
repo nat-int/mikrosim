@@ -11,7 +11,7 @@ struct particle_draw_push {
 	f32 psize;
 };
 
-mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", version::combined, 800, 600, "mikrosim",
+mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", version::combined, 1300, 720, "mikrosim",
 	[](rend::context &ctx) { static_cast<void>(ctx); },
 	[](const rend::window &win, auto &phy_device) { static_cast<void>(win);
 		static_cast<void>(phy_device); }), first_frame(true), quad_vb(nullptr), quad_ib(nullptr),
@@ -58,9 +58,14 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	view_scale = 400.f / compile_options::cells_x;
 	view_position = {f32(compile_options::cells_x) / -2.f, f32(compile_options::cells_y) / -2.f};
 	update_view();
+	win.bind_scroll_callback<mikrosim_window>();
 	particle_draw_size = .1f;
 
-	win.bind_scroll_callback<mikrosim_window>();
+	prev_frame = 0.f;
+	dt = 0.f;
+	sec_timer = 0.f;
+	frame_counter = 0;
+	fps = 0;
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -96,7 +101,7 @@ void mikrosim_window::terminate() {
 	ImGui::DestroyContext();
 }
 void mikrosim_window::loop() {
-	std::vector<rend::vertex2d> debug_bg_vd;
+	/*std::vector<rend::vertex2d> debug_bg_vd;
 	for (usize x = 0; x < compile_options::cells_x; x++) {
 		for (usize y = 0; y < compile_options::cells_y; y++) {
 			if ((x + y) % 2 == 0) {
@@ -105,10 +110,21 @@ void mikrosim_window::loop() {
 			}
 		}
 	}
-	rend::simple_mesh debug_bg_mesh{buffer_h->make_device_buffer_dedicated_stage(debug_bg_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(debug_bg_vd.size())};
+	rend::simple_mesh debug_bg_mesh{buffer_h->make_device_buffer_dedicated_stage(debug_bg_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(debug_bg_vd.size())};*/
 
+	prev_frame = f32(glfwGetTime());
 	mainloop<true>(
 		[this]() {
+			f32 this_frame = f32(glfwGetTime());
+			dt = this_frame - prev_frame;
+			prev_frame = this_frame;
+			sec_timer += dt;
+			while (sec_timer > 1) {
+				sec_timer -= 1;
+				fps = frame_counter;
+				frame_counter = 0;
+			}
+			frame_counter++;
 			inp.update(win);
 			if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_MIDDLE) &&
 				!inp.is_mouse_down(GLFW_MOUSE_BUTTON_MIDDLE)) {
@@ -119,7 +135,7 @@ void mikrosim_window::loop() {
 				running = !running;
 			}
 		},
-		[this, &debug_bg_mesh](u32 rframe, vk::CommandBuffer cmd) {
+		[this](u32 rframe, vk::CommandBuffer cmd) {
 			vk::Buffer particle_buff = p->particle_buff();
 			if (running || inp.is_key_down(GLFW_KEY_SEMICOLON)) {
 				u32 pframe = p->pframe();
@@ -144,10 +160,10 @@ void mikrosim_window::loop() {
 			cmd.reset();
 			static_cast<void>(cmd.begin(vk::CommandBufferBeginInfo{}));
 			begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
-			rend2d->bind_solid_pipeline(cmd);
+			/*rend2d->bind_solid_pipeline(cmd);
 			win.set_viewport_and_scissor(cmd);
 			rend2d->push_projection(cmd, vp);
-			debug_bg_mesh.bind_draw(cmd);
+			debug_bg_mesh.bind_draw(cmd);*/
 
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, particle_draw_pl);
 			win.set_viewport_and_scissor(cmd);
@@ -160,15 +176,16 @@ void mikrosim_window::loop() {
 			ImGui_ImplVulkan_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
-			ImGui::Begin("simulation");
+			ImGui::Begin("mikrosim");
+			ImGui::Text("%u FPS", fps);
 			if (running) {
 				ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
 			} else {
 				ImGui::TextColored({1.f, .5f, .06f, 1.f}, "stopped ([space] - start)");
 			}
-			ImGui::SliderFloat("fluid density", &p->global_density, 0.1f, 5.f, "%.3f");
+			ImGui::SliderFloat("fluid density", &p->global_density, .1f, 5.f, "%.3f");
 			ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
-			ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 4.f, "%.3f");
+			ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 2.f, "%.3f");
 			ImGui::SliderFloat("particle draw size", &particle_draw_size, 0.f, 2.f, "%.3f");
 			ImGui::End();
 			ImGui::Render();
@@ -185,7 +202,7 @@ void mikrosim_window::loop() {
 }
 void mikrosim_window::on_scroll(f64 dx, f64 dy) {
 	static_cast<void>(dx);
-	view_scale *= glm::pow(1.5f, f32(dy));
+	view_scale *= glm::pow(inp.is_key_held(GLFW_KEY_LEFT_SHIFT) ? 1.1f : 1.5f, f32(dy));
 	update_view();
 }
 void mikrosim_window::update_view() {

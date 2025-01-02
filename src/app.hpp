@@ -20,6 +20,11 @@ class mikrosim_window : public rend::preset::simple_window {
 	f32 particle_draw_size;
 	glm::mat4 vp;
 	input::input_handler inp;
+	f32 prev_frame;
+	f32 dt;
+	f32 sec_timer;
+	u32 frame_counter;
+	u32 fps;
 public:
 	mikrosim_window();
 	void terminate();

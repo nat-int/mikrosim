@@ -6,5 +6,6 @@ layout(location=0) out vec4 oc;
 
 void main() {
 	oc = vc;
-	oc.a *= smoothstep(0, 0.01, 1-dot(vp, vp));
+	//oc.a *= smoothstep(0, 0.01, 1-dot(vp, vp));
+	oc.a *= smoothstep(0, 1, 1-length(vp));
 }

@@ -20,9 +20,10 @@ void main() {
 	vec4 real_pos = vec4(pos + vpos * p.psize, 0, 1);
 	gl_Position = p.proj * real_pos;
 	fvpos = vpos;
-	if (debug_tags < 14) {
+	fvcol = vec4(.1, .1, 1., 1.);
+	/*if (debug_tags < 14) {
 		fvcol = vec4(hsv_to_rgb(vec3(debug_tags * 0.07, 1.0, 1.0)), 1.0);
 	} else {
 		fvcol = vec4(hsv_to_rgb(vec3(debug_tags * 0.07, 1.0, 0.2)), 1.0);
-	}
+	}*/
 }
