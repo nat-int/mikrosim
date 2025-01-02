@@ -5,9 +5,9 @@ option(VULKAN_VALIDATION "vulkan validation layers" ON)
 option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader info messages" ON)
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
 set(FRAMES_IN_FLIGHT 2)
-set(PARTICLE_COUNT 512)
-set(CELLS_X 10)
-set(CELLS_Y 10)
+set(PARTICLE_COUNT 32768)
+set(CELLS_X 80)
+set(CELLS_Y 80)
 set(WINDOW_CALLBACK_GENERATOR "on_##name")
 
 if(VULKAN_VALIDATION)
@@ -69,8 +69,9 @@ add_executable(mikrosim
 		${CMAKE_SOURCE_DIR}/src/rendering/preset.cpp
 	${CMAKE_SOURCE_DIR}/src/format/qoi.cpp
 	${CMAKE_SOURCE_DIR}/src/input/input.cpp
-	${CMAKE_SOURCE_DIR}/src/util.cpp)
-target_include_directories(mikrosim PUBLIC ${CMAKE_SOURCE_DIR}/submodules/)
+	${CMAKE_SOURCE_DIR}/src/util.cpp
+	${CMAKE_SOURCE_DIR}/src/imgui_impl.cpp)
+target_include_directories(mikrosim PUBLIC ${CMAKE_SOURCE_DIR}/submodules/ ${CMAKE_SOURCE_DIR}/submodules/imgui/)
 target_link_libraries(mikrosim PUBLIC glfw3 vulkan glm GPUOpen::VulkanMemoryAllocator)
 target_precompile_headers(mikrosim PUBLIC ${CMAKE_SOURCE_DIR}/src/vulkan_glfw_pch.hpp)
 target_compile_options(mikrosim PUBLIC ${WARN})

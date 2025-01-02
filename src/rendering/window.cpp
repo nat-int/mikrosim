@@ -120,6 +120,7 @@ namespace rend {
 	u32 window::height() const { return wheight; }
 	void window::set_user_pointer(void *up) { user_ptr = up; }
 	glm::dvec2 window::get_cursor_pos() const { glm::dvec2 out; glfwGetCursorPos(window_handle, &out.x, &out.y); return out; }
+	GLFWwindow *window::raw() const { return window_handle; }
 
 	void window::create(const char *title) {
 		window_handle = glfwCreateWindow(i32(wwidth), i32(wheight), title, NULL, NULL);

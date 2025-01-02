@@ -15,9 +15,9 @@ namespace compile_options {
 	constexpr bool vulkan_validation_supress_loader_info = 1;
 	constexpr bool vulkan_validation_abort = 0;
 	constexpr u32 frames_in_flight = 2;
-	constexpr u32 particle_count = 512;
-	constexpr u32 cells_x = 10;
-	constexpr u32 cells_y = 10;
+	constexpr u32 particle_count = 32768;
+	constexpr u32 cells_x = 80;
+	constexpr u32 cells_y = 80;
 #define WINDOW_CALLBACK_GENERATOR(name) on_##name
 }
 

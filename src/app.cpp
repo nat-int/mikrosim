@@ -1,4 +1,10 @@
 #include "app.hpp"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_vulkan.h"
+#pragma clang diagnostic pop
 
 struct particle_draw_push {
 	glm::mat4 proj;
@@ -52,14 +58,44 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	view_scale = 400.f / compile_options::cells_x;
 	view_position = {f32(compile_options::cells_x) / -2.f, f32(compile_options::cells_y) / -2.f};
 	update_view();
+	particle_draw_size = .1f;
 
 	win.bind_scroll_callback<mikrosim_window>();
+
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	ImGui_ImplGlfw_InitForVulkan(win.raw(), true);
+	ImGui_ImplVulkan_InitInfo imgui_vk{};
+	imgui_vk.Instance = ctx.vulkan_instance();
+	imgui_vk.PhysicalDevice = *phy_device.physical_device.handle;
+	imgui_vk.Device = *device;
+	imgui_vk.QueueFamily = phy_device.queue_family_ids[0];
+	imgui_vk.Queue = *graphics_compute_queue;
+	imgui_vk.PipelineCache = nullptr;
+	imgui_vk.DescriptorPool = *dpool;
+	imgui_vk.RenderPass = *swapchain_render_pass;
+	imgui_vk.Subpass = 0;
+	imgui_vk.ImageCount = u32(win.vulkan_swapchain_image_count());
+	imgui_vk.MinImageCount = u32(win.vulkan_swapchain_image_count());
+	imgui_vk.MSAASamples = static_cast<VkSampleCountFlagBits>(vk::SampleCountFlagBits::e1);
+	imgui_vk.Allocator = nullptr;
+	imgui_vk.CheckVkResultFn = [](VkResult res) {
+		if (res == 0) return;
+		logs::errorln("imgui", "vulkan error - result ", i32(res));
+		if (res < 0) std::exit(1);
+	};
+	ImGui_ImplVulkan_Init(&imgui_vk);
+}
+void mikrosim_window::terminate() {
+	device.waitIdle();
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 }
 void mikrosim_window::loop() {
-	float tx = 0, ty = 0;
-	auto text_vd = text.vb_only_text2d("this is a window", tx, ty, 16.f, 0, 18.f, {0,0,0,1});
-	rend::simple_mesh text_mesh{buffer_h->make_device_buffer_dedicated_stage(text_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(text_vd.size())};
-
 	std::vector<rend::vertex2d> debug_bg_vd;
 	for (usize x = 0; x < compile_options::cells_x; x++) {
 		for (usize y = 0; y < compile_options::cells_y; y++) {
@@ -83,7 +119,7 @@ void mikrosim_window::loop() {
 				running = !running;
 			}
 		},
-		[this, &text_mesh, &debug_bg_mesh](u32 rframe, vk::CommandBuffer cmd) {
+		[this, &debug_bg_mesh](u32 rframe, vk::CommandBuffer cmd) {
 			vk::Buffer particle_buff = p->particle_buff();
 			if (running || inp.is_key_down(GLFW_KEY_SEMICOLON)) {
 				u32 pframe = p->pframe();
@@ -115,19 +151,29 @@ void mikrosim_window::loop() {
 
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, particle_draw_pl);
 			win.set_viewport_and_scissor(cmd);
-			particle_draw_push push{vp, 0.1f};
+			particle_draw_push push{vp, particle_draw_size};
 			cmd.pushConstants(*particle_draw_pll, vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push), &push);
 			cmd.bindIndexBuffer(*quad_ib, 0, vk::IndexType::eUint16);
 			cmd.bindVertexBuffers(0, {*quad_vb, particle_buff}, {0, 0});
 			cmd.drawIndexed(6, compile_options::particle_count, 0, 0, 0);
 
-			rend2d->bind_text_pipeline(cmd);
-			win.set_viewport_and_scissor(cmd);
-			rend::renderer2d::text_push tp{text.scr_px_range2d(16.f)};
-			rend2d->push_text_constants(cmd, tp);
-			rend2d->bind_texture_text(cmd, text.get_ds2d(rframe));
-			rend2d->push_text_projection(cmd, rend2d->proj(rend::anchor2d::topleft));
-			text_mesh.bind_draw(cmd);
+			ImGui_ImplVulkan_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+			ImGui::Begin("simulation");
+			if (running) {
+				ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
+			} else {
+				ImGui::TextColored({1.f, .5f, .06f, 1.f}, "stopped ([space] - start)");
+			}
+			ImGui::SliderFloat("fluid density", &p->global_density, 0.1f, 5.f, "%.3f");
+			ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
+			ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 4.f, "%.3f");
+			ImGui::SliderFloat("particle draw size", &particle_draw_size, 0.f, 2.f, "%.3f");
+			ImGui::End();
+			ImGui::Render();
+			ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
 			cmd.endRenderPass();
 			cmd.end();
 		},
@@ -135,7 +181,7 @@ void mikrosim_window::loop() {
 			update_view();
 		}
 	);
-	device.waitIdle();
+	terminate();
 }
 void mikrosim_window::on_scroll(f64 dx, f64 dy) {
 	static_cast<void>(dx);

@@ -73,6 +73,7 @@ namespace rend {
 
 		void set_user_pointer(void *up);
 		glm::dvec2 get_cursor_pos() const;
+		GLFWwindow *raw() const;
 	private:
 		void *user_ptr;
 		GLFWwindow *window_handle;

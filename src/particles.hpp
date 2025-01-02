@@ -29,6 +29,10 @@ private:
 
 	rend::basic_compute_process<sim_frames> proc;
 public:
+	f32 global_density;
+	f32 stiffness;
+	f32 viscosity;
+
 	particles(const rend::context &ctx, const vk::raii::Device &device, const rend::buffer_handler &bh,
 		const vk::raii::DescriptorPool &dpool);
 	void step(vk::CommandBuffer cmd, u32 frame);
