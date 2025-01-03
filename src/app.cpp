@@ -213,24 +213,33 @@ void mikrosim_window::advance_sim(u32 rframe, bool submit_timestamps) {
 }
 void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh,
 	vk::Buffer particle_buff) {
+	constexpr f32 imgui_width = 300.f;
+	vk::Extent2D inner_ext = {win.vulkan_swapchain_extent().width - u32(imgui_width),
+		win.vulkan_swapchain_extent().height};
+
 	begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
+	win.set_viewport(cmd);
+	cmd.setScissor(0, vk::Rect2D{{u32(imgui_width), 0}, inner_ext});
 	rend2d->bind_solid_pipeline(cmd);
-	win.set_viewport_and_scissor(cmd);
 	rend2d->push_projection(cmd, vp);
 	bg_mesh.bind_draw(cmd);
 
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, particle_draw_pl);
-	win.set_viewport_and_scissor(cmd);
 	particle_draw_push push{vp, particle_draw_size};
 	cmd.pushConstants(*particle_draw_pll, vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push), &push);
 	cmd.bindIndexBuffer(*quad_ib, 0, vk::IndexType::eUint16);
 	cmd.bindVertexBuffers(0, {*quad_vb, particle_buff}, {0, 0});
 	cmd.drawIndexed(6, compile_options::particle_count, 0, 0, 0);
 
+	win.set_viewport_and_scissor(cmd);
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	if (ImGui::Begin("mikrosim")) {
+	ImGui::SetNextWindowPos({0.0f, 0.0f});
+	ImGui::SetNextWindowSize({imgui_width, f32(win.height())});
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	if (ImGui::Begin("mikrosim", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoDecoration)) {
 		ImGui::Text("%u FPS", fps); ImGui::SameLine();
 		if (running) {
 			ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
@@ -269,6 +278,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		}
 		ImGui::End();
 	}
+	ImGui::PopStyleVar();
 	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 

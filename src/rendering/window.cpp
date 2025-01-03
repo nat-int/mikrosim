@@ -96,8 +96,11 @@ namespace rend {
 			rendctx.set_object_name(**vk_device, *out.back(), ("constantan window swapchain framebuffer #"+std::to_string(i)).c_str());
 		}
 	}
-	void window::set_viewport_and_scissor(vk::CommandBuffer command_buffer) const {
+	void window::set_viewport(vk::CommandBuffer command_buffer) const {
 		command_buffer.setViewport(0, vk::Viewport{0.f, 0.f, float(vk_swapchain_extent.width), float(vk_swapchain_extent.height), 0.f, 1.f});
+	}
+	void window::set_viewport_and_scissor(vk::CommandBuffer command_buffer) const {
+		set_viewport(command_buffer);
 		command_buffer.setScissor(0, vk::Rect2D{{ 0,0 }, vk_swapchain_extent});
 	}
 

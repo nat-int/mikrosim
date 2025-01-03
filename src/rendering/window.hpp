@@ -25,6 +25,7 @@ namespace rend {
 		void set_swapchain_outdated();
 		bool is_swapchain_outdated() const;
 		void make_framebuffers(std::vector<vk::raii::Framebuffer> &out, const vk::RenderPass render_pass) const;
+		void set_viewport(vk::CommandBuffer command_buffer) const;
 		void set_viewport_and_scissor(vk::CommandBuffer command_buffer) const;
 
 		static void poll_events();
