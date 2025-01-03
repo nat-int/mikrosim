@@ -31,3 +31,5 @@ private:
 std::string utf32_to_utf8(std::u32string_view s);
 std::u32string utf8_to_utf32(std::string_view s);
 
+std::string format_time(u64 ns);
+

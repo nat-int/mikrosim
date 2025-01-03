@@ -60,14 +60,19 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	viscosity = 1.f;
 }
 
-void particles::step(vk::CommandBuffer cmd, u32 frame) {
+void particles::step(vk::CommandBuffer cmd, u32 frame, vk::QueryPool qpool) {
 	static_cast<void>(frame);
+	if (qpool) {
+		cmd.resetQueryPool(qpool, 0, timestamps);
+		cmd.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, qpool, 0);
+	}
 	auto p = proc.start(cmd);
 	glm::vec3 pkernel{(compile_options::particle_count+63)/64, 1, 1};
 	p.fill_proc_buffer(counts_buff);
 	rend::barrier::transfer_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_proc_buffers(b, rend::barrier::trans_w, rend::barrier::shader_rw, {counts_buff});
 	});
+	if (qpool) cmd.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, qpool, 1);
 	p.bind_dispatch(count_pl, cw_push{compile_options::particle_count}, pkernel);
 	constexpr static usize scan_steps = std::bit_width(cell_count_ceil-1);
 	for (usize i = 0; i < scan_steps-1; i++) {
@@ -81,6 +86,7 @@ void particles::step(vk::CommandBuffer cmd, u32 frame) {
 	rend::barrier::compute_transfer(cmd, [&p](rend::barrier &b) {
 		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::trans_w, {counts_buff});
 	});
+	if (qpool) cmd.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, qpool, 2);
 	cmd.fillBuffer(*p.pbuff(counts_buff), 16*(cell_count_ceil-1), sizeof(u32), 0);
 	rend::barrier::transfer_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_proc_buffers(b, rend::barrier::trans_w, rend::barrier::shader_rw, {counts_buff});
@@ -101,6 +107,7 @@ void particles::step(vk::CommandBuffer cmd, u32 frame) {
 	rend::barrier::compute_transfer(cmd, [&p](rend::barrier &b) {
 		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::trans_w, {counts_buff});
 	});
+	if (qpool) cmd.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, qpool, 3);
 	cmd.fillBuffer(*p.pbuff(counts_buff), 16*(cell_count), sizeof(u32),
 		compile_options::particle_count);
 	rend::barrier::transfer_compute(cmd, [&p](rend::barrier &b) {
@@ -108,19 +115,19 @@ void particles::step(vk::CommandBuffer cmd, u32 frame) {
 	});
 	p.bind_dispatch(write_pl, cw_push{compile_options::particle_count}, pkernel);
 	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
-		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::shader_r, {cell_buff});
-	});
-	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_main_buffer(b, rend::barrier::shader_r, rend::barrier::shader_rw, {0});
 		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::shader_rw, {cell_buff});
 	});
+	if (qpool) cmd.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, qpool, 4);
 	p.bind_dispatch(density_pl, cw_push{compile_options::particle_count}, pkernel);
 	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_main_buffer(b, rend::barrier::shader_rw, rend::barrier::shader_r, {0});
 		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::shader_r, {cell_buff});
 	});
+	if (qpool) cmd.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, qpool, 5);
 	p.bind_dispatch(update_pl, update_push{compile_options::particle_count, global_density * .1f,
 		stiffness * .001f, viscosity * .01f}, pkernel);
+	if (qpool) cmd.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, qpool, 6);
 }
 u32 particles::pframe() const { return u32(proc.frame); }
 vk::Buffer particles::particle_buff() const { return *proc.main_buffer[proc.frame]; }

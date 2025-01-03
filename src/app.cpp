@@ -13,9 +13,9 @@ struct particle_draw_push {
 
 mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", version::combined, 1300, 720, "mikrosim",
 	[](rend::context &ctx) { static_cast<void>(ctx); },
-	[](const rend::window &win, auto &phy_device) { static_cast<void>(win);
-		static_cast<void>(phy_device); }), first_frame(true), quad_vb(nullptr), quad_ib(nullptr),
-	particle_draw_pll(nullptr), particle_draw_pl(nullptr) {
+	[](const rend::window &win, phy_device_m_t &phy_device) {static_cast<void>(win); static_cast<void>(phy_device); }),
+	first_frame(true), quad_vb(nullptr), quad_ib(nullptr), particle_draw_pll(nullptr),
+	particle_draw_pl(nullptr), timestamp_qpool(nullptr) {
 	win.set_user_pointer(this);
 	std::vector<vk::DescriptorPoolSize> dpool_sizes = {
 		{vk::DescriptorType::eStorageBuffer, compile_options::frames_in_flight * 128},
@@ -52,6 +52,15 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		particle_draw_pl = device.createGraphicsPipeline(nullptr, pcm.get(particle_draw_pll, swapchain_render_pass));
 	}
 
+	timestamps.resize(particles::timestamps);
+	if (phy_device.physical_device.properties.limits.timestampPeriod > 0 &&
+		(phy_device.physical_device.properties.limits.timestampComputeAndGraphics ||
+		phy_device.physical_device.handle.getQueueFamilyProperties()[phy_device.queue_family_ids[0]].timestampValidBits != 0)) {
+		timestamp_qpool = device.createQueryPool({{}, vk::QueryType::eTimestamp, particles::timestamps});
+	}
+	logs::debugln("mikrosim", "physical device timestamp period is ",
+		phy_device.physical_device.properties.limits.timestampPeriod);
+
 	p.emplace(ctx, device, *buffer_h, dpool);
 
 	running = false;
@@ -59,7 +68,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	view_position = {f32(compile_options::cells_x) / -2.f, f32(compile_options::cells_y) / -2.f};
 	update_view();
 	win.bind_scroll_callback<mikrosim_window>();
-	particle_draw_size = .1f;
+	particle_draw_size = .2f;
 
 	prev_frame = 0.f;
 	dt = 0.f;
@@ -101,7 +110,7 @@ void mikrosim_window::terminate() {
 	ImGui::DestroyContext();
 }
 void mikrosim_window::loop() {
-	/*std::vector<rend::vertex2d> debug_bg_vd;
+	std::vector<rend::vertex2d> debug_bg_vd;
 	for (usize x = 0; x < compile_options::cells_x; x++) {
 		for (usize y = 0; y < compile_options::cells_y; y++) {
 			if ((x + y) % 2 == 0) {
@@ -110,7 +119,7 @@ void mikrosim_window::loop() {
 			}
 		}
 	}
-	rend::simple_mesh debug_bg_mesh{buffer_h->make_device_buffer_dedicated_stage(debug_bg_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(debug_bg_vd.size())};*/
+	rend::simple_mesh debug_bg_mesh{buffer_h->make_device_buffer_dedicated_stage(debug_bg_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(debug_bg_vd.size())};
 
 	prev_frame = f32(glfwGetTime());
 	mainloop<true>(
@@ -126,72 +135,39 @@ void mikrosim_window::loop() {
 			}
 			frame_counter++;
 			inp.update(win);
-			if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_MIDDLE) &&
-				!inp.is_mouse_down(GLFW_MOUSE_BUTTON_MIDDLE)) {
-				view_position += inp.get_cursor_delta() / view_scale;
-				update_view();
-			}
-			if (inp.is_key_down(GLFW_KEY_SPACE)) {
-				running = !running;
-			}
+			update();
 		},
-		[this](u32 rframe, vk::CommandBuffer cmd) {
+		[this, &debug_bg_mesh](u32 rframe, vk::CommandBuffer cmd) {
+			bool resubmit_timestamps = first_frame;
 			vk::Buffer particle_buff = p->particle_buff();
-			if (running || inp.is_key_down(GLFW_KEY_SEMICOLON)) {
-				u32 pframe = p->pframe();
-				vk::CommandBuffer ucmd = update_cmds[rframe];
-				ucmd.reset();
-				static_cast<void>(ucmd.begin(vk::CommandBufferBeginInfo{}));
-				p->step(ucmd, rframe);
-				ucmd.end();
-				u32 npframe = p->pframe();
-				auto signal_semaphores = {*update_semaphores[npframe], *update_render_semaphores[npframe]};
-				if (first_frame) { [[unlikely]];
-					first_frame = false;
-					graphics_compute_queue.submit({{{}, {}, ucmd, signal_semaphores}});
+			if (*timestamp_qpool && !first_frame) {
+				u64 tms[particles::timestamps * 2];
+				auto res = (*device).getQueryPoolResults(*timestamp_qpool, 0, particles::timestamps,
+					sizeof(u64)*particles::timestamps*2, tms, sizeof(u64),
+					vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWithAvailability);
+				if (res == vk::Result::eSuccess) {
+					resubmit_timestamps = true;
+					for (usize i = 0; i < particles::timestamps; i++) {
+						if (!tms[i+particles::timestamps]) { resubmit_timestamps = false; }
+					}
+					if (resubmit_timestamps) {
+						for (usize i = 0; i < particles::timestamps; i++) {
+							timestamps[i] = tms[i];
+						}
+					}
+				} else if (res == vk::Result::eNotReady) {
+					resubmit_timestamps = false;
 				} else {
-					vk::PipelineStageFlags psf = vk::PipelineStageFlagBits::eComputeShader;
-					graphics_compute_queue.submit({{*update_semaphores[pframe], psf, ucmd, signal_semaphores}});
-					render_submit_semaphores.push_back(*update_render_semaphores[pframe]);
-					render_submit_semaphore_stages.push_back(vk::PipelineStageFlagBits::eComputeShader);
+					logs::warnln("mikrosim", "getQueryPoolResults returned result code ", u32(res));
 				}
+			}
+			if (running || inp.is_key_down(GLFW_KEY_SEMICOLON)) {
+				advance_sim(rframe, resubmit_timestamps);
 			}
 
 			cmd.reset();
 			static_cast<void>(cmd.begin(vk::CommandBufferBeginInfo{}));
-			begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
-			/*rend2d->bind_solid_pipeline(cmd);
-			win.set_viewport_and_scissor(cmd);
-			rend2d->push_projection(cmd, vp);
-			debug_bg_mesh.bind_draw(cmd);*/
-
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, particle_draw_pl);
-			win.set_viewport_and_scissor(cmd);
-			particle_draw_push push{vp, particle_draw_size};
-			cmd.pushConstants(*particle_draw_pll, vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push), &push);
-			cmd.bindIndexBuffer(*quad_ib, 0, vk::IndexType::eUint16);
-			cmd.bindVertexBuffers(0, {*quad_vb, particle_buff}, {0, 0});
-			cmd.drawIndexed(6, compile_options::particle_count, 0, 0, 0);
-
-			ImGui_ImplVulkan_NewFrame();
-			ImGui_ImplGlfw_NewFrame();
-			ImGui::NewFrame();
-			ImGui::Begin("mikrosim");
-			ImGui::Text("%u FPS", fps);
-			if (running) {
-				ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
-			} else {
-				ImGui::TextColored({1.f, .5f, .06f, 1.f}, "stopped ([space] - start)");
-			}
-			ImGui::SliderFloat("fluid density", &p->global_density, .1f, 5.f, "%.3f");
-			ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
-			ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 2.f, "%.3f");
-			ImGui::SliderFloat("particle draw size", &particle_draw_size, 0.f, 2.f, "%.3f");
-			ImGui::End();
-			ImGui::Render();
-			ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-
-			cmd.endRenderPass();
+			render(cmd, debug_bg_mesh, particle_buff);
 			cmd.end();
 		},
 		[this]() {
@@ -199,6 +175,104 @@ void mikrosim_window::loop() {
 		}
 	);
 	terminate();
+}
+void mikrosim_window::update() {
+	bool pos_upd = false;
+	if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_MIDDLE) &&
+		!inp.is_mouse_down(GLFW_MOUSE_BUTTON_MIDDLE)) {
+		view_position += inp.get_cursor_delta() / view_scale;
+		pos_upd = true;
+	}
+	if (inp.is_key_held(GLFW_KEY_A)) { view_position.x += 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_D)) { view_position.x -= 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_W)) { view_position.y += 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_S)) { view_position.y -= 100.f*dt/view_scale; pos_upd = true; }
+	if (pos_upd) { update_view(); }
+	if (inp.is_key_down(GLFW_KEY_SPACE)) {
+		running = !running;
+	}
+}
+void mikrosim_window::advance_sim(u32 rframe, bool submit_timestamps) {
+	u32 pframe = p->pframe();
+	vk::CommandBuffer ucmd = update_cmds[rframe];
+	ucmd.reset();
+	static_cast<void>(ucmd.begin(vk::CommandBufferBeginInfo{}));
+	p->step(ucmd, rframe, submit_timestamps ? *timestamp_qpool : VK_NULL_HANDLE);
+	ucmd.end();
+	u32 npframe = p->pframe();
+	auto signal_semaphores = {*update_semaphores[npframe], *update_render_semaphores[npframe]};
+	if (first_frame) { [[unlikely]];
+		first_frame = false;
+		graphics_compute_queue.submit({{{}, {}, ucmd, signal_semaphores}});
+	} else {
+		vk::PipelineStageFlags psf = vk::PipelineStageFlagBits::eComputeShader;
+		graphics_compute_queue.submit({{*update_semaphores[pframe], psf, ucmd, signal_semaphores}});
+		render_submit_semaphores.push_back(*update_render_semaphores[pframe]);
+		render_submit_semaphore_stages.push_back(vk::PipelineStageFlagBits::eComputeShader);
+	}
+}
+void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh,
+	vk::Buffer particle_buff) {
+	begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
+	rend2d->bind_solid_pipeline(cmd);
+	win.set_viewport_and_scissor(cmd);
+	rend2d->push_projection(cmd, vp);
+	bg_mesh.bind_draw(cmd);
+
+	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, particle_draw_pl);
+	win.set_viewport_and_scissor(cmd);
+	particle_draw_push push{vp, particle_draw_size};
+	cmd.pushConstants(*particle_draw_pll, vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push), &push);
+	cmd.bindIndexBuffer(*quad_ib, 0, vk::IndexType::eUint16);
+	cmd.bindVertexBuffers(0, {*quad_vb, particle_buff}, {0, 0});
+	cmd.drawIndexed(6, compile_options::particle_count, 0, 0, 0);
+
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	if (ImGui::Begin("mikrosim")) {
+		ImGui::Text("%u FPS", fps); ImGui::SameLine();
+		if (running) {
+			ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
+		} else {
+			ImGui::TextColored({1.f, .5f, .06f, 1.f}, "stopped ([space] - start)");
+		}
+		ImGui::SliderFloat("fluid density", &p->global_density, .1f, 20.f, "%.3f");
+		ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
+		ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 8.f, "%.3f");
+		ImGui::SliderFloat("particle draw size", &particle_draw_size, 0.f, 2.f, "%.3f");
+		if (timestamps.empty()) {
+			ImGui::TextColored({1.f, .5f, .06f, 1.f}, "no timestamp information avaliable");
+		} else {
+			f64 tsp = f64(phy_device.physical_device.properties.limits.timestampPeriod);
+			std::vector<std::string> timestamp_names = {"count", "upsweep", "downsweep",
+				"write", "calc density", "update" };
+			if (ImGui::BeginTable("##gpu_timestamps", 3)) {
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				ImGui::TableHeader("event");
+				ImGui::TableNextColumn();
+				ImGui::TableHeader("timestamp");
+				ImGui::TableNextColumn();
+				ImGui::TableHeader("delta");
+				for (usize i = 1; i < timestamps.size(); i++) {
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn();
+					ImGui::Text("%s", i-1 < timestamp_names.size() ? timestamp_names[i-1].c_str() : "unknown");
+					ImGui::TableNextColumn();
+					ImGui::Text("%s", format_time(u64(f64(timestamps[i] - timestamps[0]) * tsp)).c_str());
+					ImGui::TableNextColumn();
+					ImGui::Text("%s", format_time(u64(f64(timestamps[i] - timestamps[i-1]) * tsp)).c_str());
+				}
+				ImGui::EndTable();
+			}
+		}
+		ImGui::End();
+	}
+	ImGui::Render();
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+	cmd.endRenderPass();
 }
 void mikrosim_window::on_scroll(f64 dx, f64 dy) {
 	static_cast<void>(dx);

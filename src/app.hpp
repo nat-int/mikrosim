@@ -13,6 +13,8 @@ class mikrosim_window : public rend::preset::simple_window {
 	std::vector<vk::raii::ShaderModule> shaders;
 	vk::raii::PipelineLayout particle_draw_pll;
 	vk::raii::Pipeline particle_draw_pl;
+	std::vector<u64> timestamps;
+	vk::raii::QueryPool timestamp_qpool;
 	std::optional<particles> p;
 	bool running;
 	f32 view_scale;
@@ -29,6 +31,9 @@ public:
 	mikrosim_window();
 	void terminate();
 	void loop();
+	void update();
+	void advance_sim(u32 rframe, bool submit_timestamps);
+	void render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh, vk::Buffer particle_buff);
 	void on_scroll(f64 dx, f64 dy);
 private:
 	void update_view();

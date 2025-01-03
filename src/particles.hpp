@@ -13,6 +13,7 @@ class particles {
 public:
 	constexpr static u32 sim_frames = compile_options::frames_in_flight + 1;
 	constexpr static u32 cell_count = compile_options::cells_x * compile_options::cells_y;
+	constexpr static u32 timestamps = 7;
 private:
 	constexpr static u32 cell_count_ceil = std::bit_ceil(cell_count);
 
@@ -35,7 +36,7 @@ public:
 
 	particles(const rend::context &ctx, const vk::raii::Device &device, const rend::buffer_handler &bh,
 		const vk::raii::DescriptorPool &dpool);
-	void step(vk::CommandBuffer cmd, u32 frame);
+	void step(vk::CommandBuffer cmd, u32 frame, vk::QueryPool qpool);
 	u32 pframe() const;
 	vk::Buffer particle_buff() const;
 };

@@ -72,3 +72,11 @@ std::u32string utf8_to_utf32(std::string_view s) {
 	return out;
 }
 
+std::string format_time(u64 ns) {
+	constexpr static const char *pfx[] = { "ns", "us", "ms", "s", "min", "h", "d", "y" };
+	constexpr static const u64 factors[] = { 1000, 1000, 1000, 60, 60, 24, 365, 0xffffffffu };
+	usize i = 0;
+	for (; ns >= factors[i] * 3; i++) { ns /= factors[i]; }
+	return std::to_string(ns) + pfx[i];
+}
+

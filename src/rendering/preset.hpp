@@ -15,7 +15,8 @@ namespace rend::preset {
 		context ctx;
 		vk::raii::Device device;
 		window win;
-		physical_device_manager_swap<queue_families::graphics_compute, queue_families::present> phy_device;
+		using phy_device_m_t = physical_device_manager_swap<queue_families::graphics_compute, queue_families::present>;
+		phy_device_m_t phy_device;
 		rend::namer namer;
 		vk::raii::Queue graphics_compute_queue;
 		vk::raii::Queue present_queue;
