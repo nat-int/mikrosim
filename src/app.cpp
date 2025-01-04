@@ -1,4 +1,5 @@
 #include "app.hpp"
+#include <cinttypes>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #include "imgui.h"
@@ -15,7 +16,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	[](rend::context &ctx) { static_cast<void>(ctx); },
 	[](const rend::window &win, phy_device_m_t &phy_device) {static_cast<void>(win); static_cast<void>(phy_device); }),
 	first_frame(true), quad_vb(nullptr), quad_ib(nullptr), particle_draw_pll(nullptr),
-	particle_draw_pl(nullptr), timestamp_qpool(nullptr) {
+	particle_draw_pl(nullptr) {
 	win.set_user_pointer(this);
 	std::vector<vk::DescriptorPoolSize> dpool_sizes = {
 		{vk::DescriptorType::eStorageBuffer, compile_options::frames_in_flight * 128},
@@ -45,18 +46,18 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		pcm.add_vertex_input_attribute(0, rend::vglm<glm::vec2>::format).
 			add_vertex_input_binding(sizeof(glm::vec2), vk::VertexInputRate::eVertex);
 		pcm.add_vertex_input_attribute(1, rend::vglm<glm::vec2>::format).
-			add_vertex_input_attribute(2, rend::vglm<u32>::format, offsetof(particle, debug_tags)).
+			add_vertex_input_attribute(2, rend::vglm<u32>::format, offsetof(particle, type)).
 			add_vertex_input_binding(sizeof(particle), vk::VertexInputRate::eInstance);
 		pcm.set_attachment_basic_blending();
 		pcm.rasterization_state.cullMode = vk::CullModeFlagBits::eNone;
 		particle_draw_pl = device.createGraphicsPipeline(nullptr, pcm.get(particle_draw_pll, swapchain_render_pass));
 	}
 
-	timestamps.resize(particles::timestamps);
-	if (phy_device.physical_device.properties.limits.timestampPeriod > 0 &&
-		(phy_device.physical_device.properties.limits.timestampComputeAndGraphics ||
-		phy_device.physical_device.handle.getQueueFamilyProperties()[phy_device.queue_family_ids[0]].timestampValidBits != 0)) {
-		timestamp_qpool = device.createQueryPool({{}, vk::QueryType::eTimestamp, particles::timestamps});
+	if (rend::supports_timestamps(phy_device.physical_device, phy_device.queue_family_ids[0])) {
+		compute_ts.init(device);
+		ctx.set_object_name(*device, *compute_ts.qpool, "compute timestamp query pool");
+		render_ts.init(device);
+		ctx.set_object_name(*device, *render_ts.qpool, "render timestamp query pool");
 	}
 	logs::debugln("mikrosim", "physical device timestamp period is ",
 		phy_device.physical_device.properties.limits.timestampPeriod);
@@ -65,7 +66,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 
 	running = false;
 	view_scale = 400.f / compile_options::cells_x;
-	view_position = {f32(compile_options::cells_x) / -2.f, f32(compile_options::cells_y) / -2.f};
+	view_position = {f32(compile_options::cells_x) / 2.f, f32(compile_options::cells_y) / 2.f};
 	update_view();
 	win.bind_scroll_callback<mikrosim_window>();
 	particle_draw_size = .2f;
@@ -138,31 +139,11 @@ void mikrosim_window::loop() {
 			update();
 		},
 		[this, &debug_bg_mesh](u32 rframe, vk::CommandBuffer cmd) {
-			bool resubmit_timestamps = first_frame;
+			compute_ts.update();
+			render_ts.update();
 			vk::Buffer particle_buff = p->particle_buff();
-			if (*timestamp_qpool && !first_frame) {
-				u64 tms[particles::timestamps * 2];
-				auto res = (*device).getQueryPoolResults(*timestamp_qpool, 0, particles::timestamps,
-					sizeof(u64)*particles::timestamps*2, tms, sizeof(u64),
-					vk::QueryResultFlagBits::e64 | vk::QueryResultFlagBits::eWithAvailability);
-				if (res == vk::Result::eSuccess) {
-					resubmit_timestamps = true;
-					for (usize i = 0; i < particles::timestamps; i++) {
-						if (!tms[i+particles::timestamps]) { resubmit_timestamps = false; }
-					}
-					if (resubmit_timestamps) {
-						for (usize i = 0; i < particles::timestamps; i++) {
-							timestamps[i] = tms[i];
-						}
-					}
-				} else if (res == vk::Result::eNotReady) {
-					resubmit_timestamps = false;
-				} else {
-					logs::warnln("mikrosim", "getQueryPoolResults returned result code ", u32(res));
-				}
-			}
 			if (running || inp.is_key_down(GLFW_KEY_SEMICOLON)) {
-				advance_sim(rframe, resubmit_timestamps);
+				advance_sim(rframe);
 			}
 
 			cmd.reset();
@@ -180,24 +161,28 @@ void mikrosim_window::update() {
 	bool pos_upd = false;
 	if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_MIDDLE) &&
 		!inp.is_mouse_down(GLFW_MOUSE_BUTTON_MIDDLE)) {
-		view_position += inp.get_cursor_delta() / view_scale;
+		view_position -= inp.get_cursor_delta() / view_scale;
 		pos_upd = true;
 	}
-	if (inp.is_key_held(GLFW_KEY_A)) { view_position.x += 100.f*dt/view_scale; pos_upd = true; }
-	if (inp.is_key_held(GLFW_KEY_D)) { view_position.x -= 100.f*dt/view_scale; pos_upd = true; }
-	if (inp.is_key_held(GLFW_KEY_W)) { view_position.y += 100.f*dt/view_scale; pos_upd = true; }
-	if (inp.is_key_held(GLFW_KEY_S)) { view_position.y -= 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_A)) { view_position.x -= 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_D)) { view_position.x += 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_W)) { view_position.y -= 100.f*dt/view_scale; pos_upd = true; }
+	if (inp.is_key_held(GLFW_KEY_S)) { view_position.y += 100.f*dt/view_scale; pos_upd = true; }
 	if (pos_upd) { update_view(); }
 	if (inp.is_key_down(GLFW_KEY_SPACE)) {
 		running = !running;
 	}
+	if (inp.is_key_down(GLFW_KEY_N)) {
+		p->spawn_cell(view_position, {0.f, 0.f});
+	}
 }
-void mikrosim_window::advance_sim(u32 rframe, bool submit_timestamps) {
+void mikrosim_window::advance_sim(u32 rframe) {
 	u32 pframe = p->pframe();
 	vk::CommandBuffer ucmd = update_cmds[rframe];
 	ucmd.reset();
 	static_cast<void>(ucmd.begin(vk::CommandBufferBeginInfo{}));
-	p->step(ucmd, rframe, submit_timestamps ? *timestamp_qpool : VK_NULL_HANDLE);
+	p->step(ucmd, rframe, compute_ts);
+	compute_ts.end();
 	ucmd.end();
 	u32 npframe = p->pframe();
 	auto signal_semaphores = {*update_semaphores[npframe], *update_render_semaphores[npframe]};
@@ -217,6 +202,8 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	vk::Extent2D inner_ext = {win.vulkan_swapchain_extent().width - u32(imgui_width),
 		win.vulkan_swapchain_extent().height};
 
+	render_ts.reset(cmd);
+	render_ts.stamp(cmd, vk::PipelineStageFlagBits::eTopOfPipe, 0);
 	begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
 	win.set_viewport(cmd);
 	cmd.setScissor(0, vk::Rect2D{{u32(imgui_width), 0}, inner_ext});
@@ -250,31 +237,53 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
 		ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 8.f, "%.3f");
 		ImGui::SliderFloat("particle draw size", &particle_draw_size, 0.f, 2.f, "%.3f");
-		if (timestamps.empty()) {
-			ImGui::TextColored({1.f, .5f, .06f, 1.f}, "no timestamp information avaliable");
-		} else {
-			f64 tsp = f64(phy_device.physical_device.properties.limits.timestampPeriod);
-			std::vector<std::string> timestamp_names = {"count", "upsweep", "downsweep",
-				"write", "calc density", "update" };
-			if (ImGui::BeginTable("##gpu_timestamps", 3)) {
+		const f64 tsp = f64(phy_device.physical_device.properties.limits.timestampPeriod);
+		std::vector<std::string> timestamp_names = {"count", "upsweep", "downsweep", "write",
+			"density", "update" };
+		if (ImGui::BeginTable("##gpu_timestamps", 3)) {
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("event");
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("timestamp");
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("delta");
+			for (u32 i = 1; i < particles::timestamps; i++) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::TableHeader("event");
+				ImGui::Text("%s", i-1 < timestamp_names.size() ? timestamp_names[i-1].c_str() : "unknown");
 				ImGui::TableNextColumn();
-				ImGui::TableHeader("timestamp");
+				ImGui::Text("%s", format_time(compute_ts.delta(i, 0, tsp)).c_str());
 				ImGui::TableNextColumn();
-				ImGui::TableHeader("delta");
-				for (usize i = 1; i < timestamps.size(); i++) {
-					ImGui::TableNextRow();
-					ImGui::TableNextColumn();
-					ImGui::Text("%s", i-1 < timestamp_names.size() ? timestamp_names[i-1].c_str() : "unknown");
-					ImGui::TableNextColumn();
-					ImGui::Text("%s", format_time(u64(f64(timestamps[i] - timestamps[0]) * tsp)).c_str());
-					ImGui::TableNextColumn();
-					ImGui::Text("%s", format_time(u64(f64(timestamps[i] - timestamps[i-1]) * tsp)).c_str());
-				}
-				ImGui::EndTable();
+				ImGui::Text("%s", format_time(compute_ts.delta(i, i-1, tsp)).c_str());
 			}
+			ImGui::EndTable();
+		}
+		if (ImGui::BeginTable("##gpu_timestamps2", 3)) {
+			static constexpr u64 sns = 1'000'000'000ull;
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("time");
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("rate (Hz)");
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("simulation");
+			ImGui::TableNextColumn();
+			u64 cd = compute_ts.delta(particles::timestamps-1, 0, tsp);
+			ImGui::Text("%s", format_time(cd).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text("%" PRIu64, cd > 0 ? sns / cd : 0);
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			ImGui::TableHeader("render (gpu)");
+			ImGui::TableNextColumn();
+			u64 rd = render_ts.delta(render_timestamps-1, 0, tsp);
+			ImGui::Text("%s", format_time(rd).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text("%" PRIu64, rd > 0 ? sns / rd : 0);
+			ImGui::EndTable();
 		}
 		ImGui::End();
 	}
@@ -283,6 +292,8 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
 	cmd.endRenderPass();
+	render_ts.stamp(cmd, vk::PipelineStageFlagBits::eBottomOfPipe, 1);
+	render_ts.end();
 }
 void mikrosim_window::on_scroll(f64 dx, f64 dy) {
 	static_cast<void>(dx);
@@ -291,6 +302,6 @@ void mikrosim_window::on_scroll(f64 dx, f64 dy) {
 }
 void mikrosim_window::update_view() {
 	vp = rend2d->proj(rend::anchor2d::center) *
-		glm::translate(glm::scale(glm::mat4(1.f), {view_scale, view_scale, 1.f}), {view_position, 0.f});
+		glm::translate(glm::scale(glm::mat4(1.f), {view_scale, view_scale, 1.f}), {-view_position, 0.f});
 }
 

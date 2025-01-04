@@ -40,6 +40,11 @@ float force(float dist, float density) {
 void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
 	if (particle_id < push.pcount) {
+		uint type = particles.data[particle_id].type;
+		particles_next.data[particle_id].type = type;
+		if (type == 0) {
+			return;
+		}
 		vec2 pos = particles.data[particle_id].pos;
 		vec2 vel = particles.data[particle_id].vel;
 		vec2 adj_pos = pos + vel * .5;
@@ -101,7 +106,7 @@ void main() {
 		if (pos.y < 0) { pos.y = -pos.y; vel.y = -vel.y; }
 		particles_next.data[particle_id].pos = pos + vel;
 		particles_next.data[particle_id].vel = vel;
-		particles_next.data[particle_id].debug_tags = counts.data[cell_id];
+		particles_next.data[particle_id].type = type;
 	}
 }
 

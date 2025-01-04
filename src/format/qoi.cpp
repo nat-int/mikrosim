@@ -104,7 +104,7 @@ namespace format::qoi {
 					logs::warnln("qoi decoder", "invalid end marker!");
 				}
 				if (nbytes < 8) {
-					state = 247+nbytes;
+					state = u8(247+nbytes);
 					return;
 				}
 				if (data[7] != 1)
@@ -119,7 +119,7 @@ namespace format::qoi {
 				if (nbytes < 5) {
 					if (nbytes > 1)
 						std::copy_n(data+1, nbytes-1, sdata.begin());
-					state = nbytes + 1;
+					state = u8(nbytes + 1);
 					return;
 				}
 				rgba(data[1], data[2], data[3], data[4]);
@@ -129,7 +129,7 @@ namespace format::qoi {
 				if (nbytes < 4) {
 					if (nbytes > 1)
 						std::copy_n(data+1, nbytes-1, sdata.begin());
-					state = nbytes + 6;
+					state = u8(nbytes + 6);
 					return;
 				}
 				rgb(data[1], data[2], data[3]);
@@ -150,6 +150,7 @@ namespace format::qoi {
 					nbytes -= 2;
 					break;}
 				case 0b11: run(*(data++)); nbytes--; break;
+				default: break;
 				}
 			}
 		}
@@ -157,7 +158,7 @@ namespace format::qoi {
 	void decoder::decode(std::istream &is) {
 		constexpr usize buff_size = 4096;
 		usize nbytes;
-		for (u8 buffer[buff_size]; (nbytes = is.readsome(reinterpret_cast<char *>(buffer), buff_size)) > 0;) {
+		for (u8 buffer[buff_size]; (nbytes = usize(is.readsome(reinterpret_cast<char *>(buffer), buff_size))) > 0;) {
 			decode(buffer, nbytes);
 			if (nbytes < buff_size)
 				return;
@@ -209,7 +210,7 @@ namespace format::qoi {
 		//logs::debugln("qoi debug", "[RUN] ", u16(l), "x (", u16(last[0]), " ", u16(last[1]), " ", u16(last[2]), " ", u16(last[3]), ")");
 		if (i/4 + l > raw_data.size()/4) {
 			logs::errorln("qoi decoder", "Data array overflow!");
-			l = (raw_data.size()-i) / 4;
+			l = u8((raw_data.size()-i) / 4);
 		}
 		for (u8 j = 0; j < l; j++) {
 			for (u8 v : last) {

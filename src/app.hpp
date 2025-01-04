@@ -3,8 +3,10 @@
 #include "input/input.hpp"
 #include "particles.hpp"
 #include "rendering/preset.hpp"
+#include "rendering/timestamp.hpp"
 
 class mikrosim_window : public rend::preset::simple_window {
+	static constexpr u32 render_timestamps = 2;
 	bool first_frame;
 	vma::buffer quad_vb, quad_ib;
 	std::vector<vk::raii::CommandBuffer> update_cmds;
@@ -13,8 +15,8 @@ class mikrosim_window : public rend::preset::simple_window {
 	std::vector<vk::raii::ShaderModule> shaders;
 	vk::raii::PipelineLayout particle_draw_pll;
 	vk::raii::Pipeline particle_draw_pl;
-	std::vector<u64> timestamps;
-	vk::raii::QueryPool timestamp_qpool;
+	rend::timestamps<particles::timestamps> compute_ts;
+	rend::timestamps<render_timestamps> render_ts;
 	std::optional<particles> p;
 	bool running;
 	f32 view_scale;
@@ -32,7 +34,7 @@ public:
 	void terminate();
 	void loop();
 	void update();
-	void advance_sim(u32 rframe, bool submit_timestamps);
+	void advance_sim(u32 rframe);
 	void render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh, vk::Buffer particle_buff);
 	void on_scroll(f64 dx, f64 dy);
 private:

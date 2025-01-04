@@ -18,6 +18,11 @@ layout(std140, set=0, binding=2) writeonly buffer indices_t {
 void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
 	if (particle_id < push.pcount) {
+		uint type = particles.data[particle_id].type;
+		if (type == 0) {
+			//indices.data[particle_id] = push.pcount - 1;
+			return;
+		}
 		uvec2 cell = uvec2(particles.data[particle_id].pos + particles.data[particle_id].vel * .5f);
 		uint cell_id = cell.x + cell.y * CELLS_X;
 		indices.data[particle_id] = atomicAdd(counts.data[cell_id], 1);

@@ -27,6 +27,9 @@ float density_contribution(float dist) {
 void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
 	if (particle_id < push.pcount) {
+		if (particles.data[particle_id].type == 0) {
+			  return;
+		}
 		vec2 adj_pos = particles.data[particle_id].pos + particles.data[particle_id].vel * .5f;
 		uvec2 cell = uvec2(adj_pos);
 		uint cell_id = cell.x + cell.y * CELLS_X;

@@ -6,8 +6,9 @@ option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader 
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
 set(FRAMES_IN_FLIGHT 2)
 set(PARTICLE_COUNT 32768)
-set(CELLS_X 80)
-set(CELLS_Y 80)
+set(CELL_PARTICLE_COUNT 128)
+set(CELLS_X 100)
+set(CELLS_Y 100)
 set(WINDOW_CALLBACK_GENERATOR "on_##name")
 
 if(VULKAN_VALIDATION)
@@ -62,11 +63,12 @@ configure_file(${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp.in ${CMAKE_SOURCE_DIR}/src
 add_executable(mikrosim
 	${CMAKE_SOURCE_DIR}/src/main.cpp
 		${CMAKE_SOURCE_DIR}/src/app.cpp ${CMAKE_SOURCE_DIR}/src/particles.cpp
+		${CMAKE_SOURCE_DIR}/src/cell.cpp
 	${CMAKE_SOURCE_DIR}/src/rendering/window.cpp ${CMAKE_SOURCE_DIR}/src/rendering/context.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/device.cpp ${CMAKE_SOURCE_DIR}/src/rendering/pipeline.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/vma_wrap.cpp ${CMAKE_SOURCE_DIR}/src/rendering/2d.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/buffers.cpp ${CMAKE_SOURCE_DIR}/src/rendering/text.cpp
-		${CMAKE_SOURCE_DIR}/src/rendering/preset.cpp
+		${CMAKE_SOURCE_DIR}/src/rendering/timestamp.cpp ${CMAKE_SOURCE_DIR}/src/rendering/preset.cpp
 	${CMAKE_SOURCE_DIR}/src/format/qoi.cpp
 	${CMAKE_SOURCE_DIR}/src/input/input.cpp
 	${CMAKE_SOURCE_DIR}/src/util.cpp
@@ -84,11 +86,13 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	target_compile_options(mikrosim PRIVATE -fcolor-diagnostics)
 endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	if(CONFIG STREQUAL "Debug")
+	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+		message(STATUS "using undefined sanitizer")
 		target_compile_options(mikrosim PRIVATE -fsanitize=undefined)
 		target_link_options(mikrosim PRIVATE -fsanitize=undefined)
 	endif()
-	if(CONFIG STREQUAL "RelWithDebInfo")
+	if(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+		message(STATUS "using address sanitizer")
 		target_compile_options(mikrosim PRIVATE -fsanitize=address)
 		target_link_options(mikrosim PRIVATE -fsanitize=address)
 	endif()
