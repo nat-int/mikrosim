@@ -1,4 +1,5 @@
 #include "particles.hpp"
+#include <imgui.h>
 #include "rendering/pipeline.hpp"
 
 static f32 randf() {
@@ -8,10 +9,10 @@ static f32 randf() {
 static glm::vec2 randv() { return {randf(), randf()}; }
 static glm::vec2 randuv() { f32 a = randf() * glm::pi<f32>() * 2; return {glm::cos(a), glm::sin(a)}; }
 
-struct cw_push { u32 pcount; };
+struct cwd_push { u32 pcount; };
 struct sweep_push { u32 invocs; u32 off; };
-struct density_push { u32 pcount; };
 struct update_push { u32 pcount; f32 global_density; f32 stiffness; f32 viscosity; };
+struct report_push { u32 off; u32 pcount; };
 
 struct particle_id {
 	alignas(16) glm::vec2 pos;
@@ -23,7 +24,7 @@ struct particle_id {
 
 particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	const rend::buffer_handler &bh, const vk::raii::DescriptorPool &dpool) : proc(device, bh),
-	cell_stage(nullptr) {
+	cell_stage(nullptr), reports(nullptr) {
 	std::vector<particle> particle_data(compile_options::particle_count);
 	for (u32 i = 0; i < compile_options::particle_count; i++) {
 		particle_data[i].pos = randv() * glm::fvec2{compile_options::cells_x, compile_options::cells_y};
@@ -35,37 +36,51 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	proc.add_buffer(cell_count_1ceil * 16, vk::BufferUsageFlagBits::eTransferDst);
 	proc.add_buffer(compile_options::particle_count * 16);
 	proc.add_buffer(compile_options::particle_count * sizeof(particle_id));
+	proc.add_buffer(compile_options::cell_particle_count * sizeof(particle_report),
+		vk::BufferUsageFlagBits::eTransferSrc);
 	for (u32 i = 0; i < sim_frames; i++) {
 		ctx.set_object_name(device, *proc.main_buffer[i], ("particle main buffer #"+std::to_string(i)).c_str());
 	}
 	ctx.set_object_name(*device, *proc.proc_buffers[counts_buff-1], "particle counts buffer");
 	ctx.set_object_name(*device, *proc.proc_buffers[index_buff-1], "particle index/density buffer");
 	ctx.set_object_name(*device, *proc.proc_buffers[cell_buff-1], "particle cell buffer");
+	ctx.set_object_name(*device, *proc.proc_buffers[report_buff-1], "particle report buffer");
 
 	cell_stage = bh.get_alloc().create_buffer({{}, sizeof(particle)*compile_options::cell_particle_count*
 		sim_frames, vk::BufferUsageFlagBits::eTransferSrc},
 		{vma::allocation_create_flag_bits::eHostAccessRandom, vma::memory_usage::eAuto});
 	cell_stage_map = static_cast<particle *>(cell_stage.map());
+	reports = bh.get_alloc().create_buffer({{}, sizeof(particle_report)*compile_options::cell_particle_count,
+		vk::BufferUsageFlagBits::eTransferDst}, {vma::allocation_create_flag_bits::eHostAccessRandom,
+		vma::memory_usage::eAuto});
+	reports_map = static_cast<particle_report *>(reports.map());
+	ctx.set_object_name(*device, *cell_stage, "cell staging buffer");
+	ctx.set_object_name(*device, *reports, "cell reports (staging) buffer");
 
 	logs::infoln("particles", compile_options::particle_count, " max particles, ", cell_count, " cells");
 	logs::infoln("particles", "counts buffer has ", cell_count_1ceil, " entries");
 
-	proc.add_main_buffer_pipeline<cw_push>(dpool, "./shaders/count.comp.spv", {counts_buff, index_buff}, 1);
+	proc.add_main_buffer_pipeline<cwd_push>(dpool, "./shaders/count.comp.spv", {counts_buff, index_buff}, 1);
 	proc.add_proc_buffer_pipeline<sweep_push>(dpool, "./shaders/upsweep.comp.spv", {counts_buff});
 	proc.add_proc_buffer_pipeline<sweep_push>(dpool, "./shaders/downsweep.comp.spv", {counts_buff});
-	proc.add_main_buffer_pipeline<cw_push>(dpool, "./shaders/write.comp.spv", {counts_buff, index_buff, cell_buff}, 1);
-	proc.add_main_buffer_pipeline<density_push>(dpool, "./shaders/density.comp.spv", {counts_buff, index_buff, cell_buff}, 1);
+	proc.add_main_buffer_pipeline<cwd_push>(dpool, "./shaders/write.comp.spv", {counts_buff, index_buff, cell_buff}, 1);
+	proc.add_main_buffer_pipeline<cwd_push>(dpool, "./shaders/density.comp.spv", {counts_buff, index_buff, cell_buff}, 1);
 	proc.add_main_buffer_pipeline<update_push>(dpool, "./shaders/update.comp.spv", {counts_buff, cell_buff}, 2);
+	proc.add_main_buffer_pipeline<report_push>(dpool, "./shaders/report.comp.spv", {report_buff}, 1);
 	ctx.set_object_name(*device, *proc.pipelines[count_pl].pipeline, "particle count pipeline");
 	ctx.set_object_name(*device, *proc.pipelines[upsweep_pl].pipeline, "particle upsweep pipeline");
 	ctx.set_object_name(*device, *proc.pipelines[downsweep_pl].pipeline, "particle downsweep pipeline");
 	ctx.set_object_name(*device, *proc.pipelines[write_pl].pipeline, "particle write pipeline");
 	ctx.set_object_name(*device, *proc.pipelines[density_pl].pipeline, "particle density pipeline");
 	ctx.set_object_name(*device, *proc.pipelines[update_pl].pipeline, "particle update pipeline");
+	ctx.set_object_name(*device, *proc.pipelines[report_pl].pipeline, "particle report pipeline");
 
 	next_cell_stage = 0;
-	for (u32 i = compile_options::particle_count-1; i >= compile_options::env_particle_count; i--) {
+	for (u32 i = compile_options::cell_particle_count-1; ; i--) {
 		free_cells.push_back(i);
+		cells[i].s = cell::state::none;
+		if (i == 0)
+			break;
 	}
 
 	global_density = 2.f;
@@ -74,7 +89,24 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 }
 particles::~particles() { cell_stage.unmap(); }
 
-void particles::step(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<timestamps> &ts) {
+void particles::step_cpu() {
+	for (u32 i = 0; i < compile_options::cell_particle_count; i++) {
+		if (cells[i].s != cell::state::none) {
+			cells[i].pos = reports_map[i].pos;
+			cells[i].vel = reports_map[i].vel;
+			if (rand() % 150 == 0) {
+				kill_cell(i + compile_options::env_particle_count);
+				continue;
+			}
+			if (cells[i].div_timer == 0) {
+				spawn_cell(cells[i].pos, cells[i].vel);
+				cells[i].div_timer = 100;
+			}
+			cells[i].div_timer--;
+		}
+	}
+}
+void particles::step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<timestamps> &ts) {
 	static_cast<void>(frame);
 	ts.reset(cmd);
 	ts.stamp(cmd, vk::PipelineStageFlagBits::eTopOfPipe, 0);
@@ -91,7 +123,16 @@ void particles::step(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<ti
 		}
 	});
 	curr_staged.clear();
-	p.bind_dispatch(count_pl, cw_push{compile_options::particle_count}, pkernel);
+	p.pl(report_pl).bind(cmd);
+	p.pl(report_pl).bind_ds(cmd, {*p.pl(report_pl).ds[p.frame(0)]});
+	p.push_dispatch(report_pl, report_push{compile_options::env_particle_count,
+		compile_options::particle_count}, {(compile_options::cell_particle_count+63)/64, 1, 1});
+	rend::barrier::compute_transfer(cmd, [&p](rend::barrier &b) {
+		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::trans_r, {report_buff});
+	});
+	cmd.copyBuffer(*p.pbuff(report_buff), *reports, {vk::BufferCopy{0, 0, proc.buffer_sizes[report_buff]}});
+
+	p.bind_dispatch(count_pl, cwd_push{compile_options::particle_count}, pkernel);
 	constexpr static usize scan_steps = std::bit_width(cell_count_1ceil)-1;
 	for (usize i = 0; i < scan_steps-1; i++) {
 		rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
@@ -126,13 +167,13 @@ void particles::step(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<ti
 		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::shader_r, {index_buff}); // from count_pl
 	});
 	ts.stamp(cmd, vk::PipelineStageFlagBits::eComputeShader, 3);
-	p.bind_dispatch(write_pl, cw_push{compile_options::particle_count}, pkernel);
+	p.bind_dispatch(write_pl, cwd_push{compile_options::particle_count}, pkernel);
 	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_main_buffer(b, rend::barrier::shader_r, rend::barrier::shader_rw, {0});
 		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::shader_rw, {cell_buff});
 	});
 	ts.stamp(cmd, vk::PipelineStageFlagBits::eComputeShader, 4);
-	p.bind_dispatch(density_pl, density_push{compile_options::particle_count}, pkernel);
+	p.bind_dispatch(density_pl, cwd_push{compile_options::particle_count}, pkernel);
 	rend::barrier::compute_compute(cmd, [&p](rend::barrier &b) {
 		p.barrier_main_buffer(b, rend::barrier::shader_rw, rend::barrier::shader_r, {0});
 		p.barrier_proc_buffers(b, rend::barrier::shader_rw, rend::barrier::shader_r, {cell_buff});
@@ -142,6 +183,30 @@ void particles::step(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<ti
 		stiffness * .001f, viscosity * .01f}, pkernel);
 	ts.stamp(cmd, vk::PipelineStageFlagBits::eBottomOfPipe, 6);
 }
+void particles::imgui() {
+	if (ImGui::Begin("cell list")) {
+		if (ImGui::BeginTable("##cell_list_table", 5)) {
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn(); ImGui::TableHeader("gpu id");
+			ImGui::TableNextColumn(); ImGui::TableHeader("pos x");
+			ImGui::TableNextColumn(); ImGui::TableHeader("pos y");
+			ImGui::TableNextColumn(); ImGui::TableHeader("vel x");
+			ImGui::TableNextColumn(); ImGui::TableHeader("vel y");
+			for (const auto &c : cells) {
+				if (c.s != cell::state::none) {
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn(); ImGui::Text("%u", c.gpu_id);
+					ImGui::TableNextColumn(); ImGui::Text("%.2f", f64(c.pos.x));
+					ImGui::TableNextColumn(); ImGui::Text("%.2f", f64(c.pos.y));
+					ImGui::TableNextColumn(); ImGui::Text("%.2f", f64(c.vel.x));
+					ImGui::TableNextColumn(); ImGui::Text("%.2f", f64(c.vel.y));
+				}
+			}
+		}
+		ImGui::EndTable();
+	}
+	ImGui::End();
+}
 u32 particles::pframe() const { return u32(proc.frame); }
 vk::Buffer particles::particle_buff() const { return *proc.main_buffer[proc.frame]; }
 void particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
@@ -149,19 +214,24 @@ void particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 		logs::errorln("not enough space for more cells");
 		return;
 	}
-	u32 gi = free_cells.back();
+	u32 ci = free_cells.back();
+	u32 gi = ci + compile_options::env_particle_count;
 	u32 si = next_cell_stage;
 	free_cells.pop_back();
 	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::cell_particle_count);
 	cell_stage_map[si] = {pos, 2, 0.f, vel};
 	curr_staged.push_back({si * sizeof(particle), gi * sizeof(particle), sizeof(particle)});
-	cells.push_back({cell::gpu_state::staged, gi});
+	reports_map[ci].pos = pos;
+	reports_map[ci].vel = vel;
+	cells[ci] = {cell::state::active, gi, pos, vel, 100};
 }
 void particles::kill_cell(u32 gpu_id) {
 	u32 si = next_cell_stage;
+	u32 ci = gpu_id - compile_options::env_particle_count;
 	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::cell_particle_count);
-	free_cells.push_back(gpu_id);
+	free_cells.push_back(ci);
 	cell_stage_map[si].type = 0;
 	curr_staged.push_back({si * sizeof(particle), gpu_id * sizeof(particle), sizeof(particle)});
+	cells[ci].s = cell::state::none;
 }
 

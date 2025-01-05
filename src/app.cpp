@@ -181,7 +181,7 @@ void mikrosim_window::advance_sim(u32 rframe) {
 	vk::CommandBuffer ucmd = update_cmds[rframe];
 	ucmd.reset();
 	static_cast<void>(ucmd.begin(vk::CommandBufferBeginInfo{}));
-	p->step(ucmd, rframe, compute_ts);
+	p->step_gpu(ucmd, rframe, compute_ts);
 	compute_ts.end();
 	ucmd.end();
 	u32 npframe = p->pframe();
@@ -195,6 +195,7 @@ void mikrosim_window::advance_sim(u32 rframe) {
 		render_submit_semaphores.push_back(*update_render_semaphores[pframe]);
 		render_submit_semaphore_stages.push_back(vk::PipelineStageFlagBits::eComputeShader);
 	}
+	p->step_cpu();
 }
 void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh,
 	vk::Buffer particle_buff) {
@@ -257,8 +258,8 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 				ImGui::TableNextColumn();
 				ImGui::Text("%s", format_time(compute_ts.delta(i, i-1, tsp)).c_str());
 			}
-			ImGui::EndTable();
 		}
+		ImGui::EndTable();
 		if (ImGui::BeginTable("##gpu_timestamps2", 3)) {
 			static constexpr u64 sns = 1'000'000'000ull;
 			ImGui::TableNextRow();
@@ -283,11 +284,12 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 			ImGui::Text("%s", format_time(rd).c_str());
 			ImGui::TableNextColumn();
 			ImGui::Text("%" PRIu64, rd > 0 ? sns / rd : 0);
-			ImGui::EndTable();
 		}
-		ImGui::End();
+		ImGui::EndTable();
 	}
+	ImGui::End();
 	ImGui::PopStyleVar();
+	p->imgui();
 	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 

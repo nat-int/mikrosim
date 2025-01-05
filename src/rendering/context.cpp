@@ -78,8 +78,13 @@ namespace rend {
 					if (data->messageIdNumber == 0 && severity < VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 						return VK_FALSE;
 				}
-				msg << " [" << data->messageIdNumber << ' ' << data->pMessageIdName << "] " << data->pMessage;
-				/*
+				msg << " 0x" << std::hex << data->messageIdNumber << std::dec << ' ' <<
+					data->pMessageIdName << "\n";
+				const std::string pmsgs = data->pMessage;
+				auto fbp = pmsgs.find('|');
+				auto sbp = fbp == std::string::npos ? std::string::npos : pmsgs.find('|', fbp);
+				if (sbp == std::string::npos) { msg << pmsgs; }
+				else { msg << pmsgs.substr(sbp); }
 				if (data->queueLabelCount) {
 					msg << "\nqueue labels:";
 					for (size_t i = 0; i < data->queueLabelCount; i++) {
@@ -93,12 +98,11 @@ namespace rend {
 					}
 				}
 				if (data->objectCount) {
-					msg << "\nobjects:";
 					for (size_t i = 0; i < data->objectCount; i++) {
-						msg << "\n\tobject " << i << " at 0x" << std::hex << data->pObjects[i].objectHandle << std::dec <<
-							"\n\t\ttype: " << vk::to_string(static_cast<vk::ObjectType>(data->pObjects[i].objectType));
+						msg << "\nobj " << i << " at 0x" << std::hex << data->pObjects[i].objectHandle << std::dec <<
+							": " << vk::to_string(static_cast<vk::ObjectType>(data->pObjects[i].objectType));
 						if (data->pObjects[i].pObjectName) {
-							msg << "\n\t\tname: " << data->pObjects[i].pObjectName;
+							msg << " [" << data->pObjects[i].pObjectName << "]";
 						}
 					}
 				}//*/

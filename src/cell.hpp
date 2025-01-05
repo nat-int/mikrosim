@@ -4,9 +4,12 @@
 
 class cell {
 public:
-	enum class gpu_state { staged, active };
+	enum class state { none, active };
 
-	gpu_state gs;
+	state s;
 	u32 gpu_id;
+	glm::vec2 pos;
+	glm::vec2 vel;
+	u32 div_timer;
 };
 

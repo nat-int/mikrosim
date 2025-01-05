@@ -1,0 +1,30 @@
+#version 450
+#include "settings.glsl"
+
+layout(local_size_x=64) in;
+layout(push_constant) uniform push_t {
+	uint off;
+	uint pcount;
+} push;
+layout(std140, set=0, binding=0) readonly buffer particles_t {
+	particle data[];
+} particles;
+struct particle_report {
+	vec2 pos;
+	vec2 vel;
+};
+layout(std140, set=0, binding=1) writeonly buffer reports_t {
+	particle_report data[];
+} reports;
+
+void main() {
+	uint ri = gl_GlobalInvocationID.x;
+	uint particle_id = ri + push.off;
+	if (particle_id < push.pcount) {
+		uint type = particles.data[particle_id].type;
+		//if (type != 2) { return; }
+		reports.data[ri].pos = particles.data[particle_id].pos;
+		reports.data[ri].vel = particles.data[particle_id].vel;
+	}
+}
+
