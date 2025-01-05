@@ -1,7 +1,8 @@
 /.cache/**
 /build/**
-/out/**
-!/out/**.spv
+/out/*
+!/out/shaders/
+!/out/shaders/*.spv
 /src/cmake_defs.hpp
 /src/shaders/settings.glsl
 **/__pycache__/**
