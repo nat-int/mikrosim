@@ -15,8 +15,8 @@ struct particle_draw_push {
 mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", version::combined, 1300, 720, "mikrosim",
 	[](rend::context &ctx) { static_cast<void>(ctx); },
 	[](const rend::window &win, phy_device_m_t &phy_device) {static_cast<void>(win); static_cast<void>(phy_device); }),
-	first_frame(true), quad_vb(nullptr), quad_ib(nullptr), particle_draw_pll(nullptr),
-	particle_draw_pl(nullptr) {
+	first_frame(true), quad_vb(nullptr), quad_ib(nullptr), concs_stage(nullptr), concs_isb(nullptr),
+	particle_draw_pll(nullptr), particle_draw_pl(nullptr) {
 	win.set_user_pointer(this);
 	std::vector<vk::DescriptorPoolSize> dpool_sizes = {
 		{vk::DescriptorType::eStorageBuffer, compile_options::frames_in_flight * 128},
@@ -30,6 +30,13 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	quad_vb = buffer_h->make_device_buffer_dedicated_stage(quad_vd, vk::BufferUsageFlagBits::eVertexBuffer);
 	quad_ib = buffer_h->make_device_buffer_dedicated_stage(quad_id, vk::BufferUsageFlagBits::eIndexBuffer);
 
+	concs_stage = buffer_h->make_staging_buffer(compile_options::particle_count*16,
+		vk::BufferUsageFlagBits::eTransferSrc);
+	concs_stage_map = static_cast<std140_f32 *>(concs_stage.map());
+	std::vector<std140_f32> concs_isd(16*compile_options::particle_count);
+	concs_isb = buffer_h->make_device_buffer_dedicated_stage(concs_isd,
+		vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+
 	update_cmds = device.allocateCommandBuffers({*command_pool, vk::CommandBufferLevel::ePrimary,
 		compile_options::frames_in_flight});
 	for (usize i = 0; i < particles::sim_frames; i++) {
@@ -40,6 +47,8 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	vk::PushConstantRange push_range{vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push)};
 	particle_draw_pll = device.createPipelineLayout({{}, {}, push_range});
 	shaders = rend::load_shaders_from_file(device, {"./shaders/particle.vert.spv", "./shaders/particle.frag.spv"});
+	ctx.set_object_name(*device, *shaders[0], "particle vertex shader");
+	ctx.set_object_name(*device, *shaders[1], "particle fragment shader");
 	{
 		rend::graphics_pipeline_create_maker pcm;
 		pcm.set_shaders_gl({vk::ShaderStageFlagBits::eVertex, vk::ShaderStageFlagBits::eFragment}, { *shaders[0], *shaders[1] });
@@ -48,10 +57,13 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		pcm.add_vertex_input_attribute(1, rend::vglm<glm::vec2>::format).
 			add_vertex_input_attribute(2, rend::vglm<u32>::format, offsetof(particle, type)).
 			add_vertex_input_binding(sizeof(particle), vk::VertexInputRate::eInstance);
+		pcm.add_vertex_input_attribute(3, rend::vglm<f32>::format).
+			add_vertex_input_binding(sizeof(std140_f32), vk::VertexInputRate::eInstance);
 		pcm.set_attachment_basic_blending();
 		pcm.rasterization_state.cullMode = vk::CullModeFlagBits::eNone;
 		particle_draw_pl = device.createGraphicsPipeline(nullptr, pcm.get(particle_draw_pll, swapchain_render_pass));
 	}
+	ctx.set_object_name(*device, *particle_draw_pl, "particle render pipeline");
 
 	if (rend::supports_timestamps(phy_device.physical_device, phy_device.queue_family_ids[0])) {
 		compute_ts.init(device);
@@ -69,7 +81,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	view_position = {f32(compile_options::cells_x) / 2.f, f32(compile_options::cells_y) / 2.f};
 	update_view();
 	win.bind_scroll_callback<mikrosim_window>();
-	particle_draw_size = .2f;
+	particle_draw_size = .6f;
 
 	prev_frame = 0.f;
 	dt = 0.f;
@@ -148,6 +160,19 @@ void mikrosim_window::loop() {
 
 			cmd.reset();
 			static_cast<void>(cmd.begin(vk::CommandBufferBeginInfo{}));
+			if (rframe == 0) {
+				for (usize i = 0; i < compile_options::particle_count; i++) {
+					concs_stage_map[i].v = p->comps->at(0, i);
+				}
+				cmd.copyBuffer(*concs_stage, *concs_isb, {{0, 0, sizeof(std140_f32) *
+					compile_options::particle_count}});
+				{
+					auto b = rend::barrier(cmd, vk::PipelineStageFlagBits::eTransfer,
+						vk::PipelineStageFlagBits::eVertexInput);
+					b.buff(rend::barrier::trans_w, vk::AccessFlagBits::eVertexAttributeRead,
+						*concs_isb, sizeof(std140_f32) * compile_options::particle_count);
+				}
+			}
 			render(cmd, debug_bg_mesh, particle_buff);
 			cmd.end();
 		},
@@ -173,7 +198,13 @@ void mikrosim_window::update() {
 		running = !running;
 	}
 	if (inp.is_key_down(GLFW_KEY_N)) {
-		p->spawn_cell(view_position, {0.f, 0.f});
+		// adding that thing to position fixes cells spawning at -nan when in starting
+		// view for some reason, probably glm being weird with types??
+		p->spawn_cell(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
+	}
+	if (inp.is_key_down(GLFW_KEY_F12)) {
+		running = false;
+		p->debug_dump();
 	}
 }
 void mikrosim_window::advance_sim(u32 rframe) {
@@ -216,7 +247,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	particle_draw_push push{vp, particle_draw_size};
 	cmd.pushConstants(*particle_draw_pll, vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push), &push);
 	cmd.bindIndexBuffer(*quad_ib, 0, vk::IndexType::eUint16);
-	cmd.bindVertexBuffers(0, {*quad_vb, particle_buff}, {0, 0});
+	cmd.bindVertexBuffers(0, {*quad_vb, particle_buff, *concs_isb}, {0, 0, 0});
 	cmd.drawIndexed(6, compile_options::particle_count, 0, 0, 0);
 
 	win.set_viewport_and_scissor(cmd);
@@ -226,8 +257,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	ImGui::SetNextWindowPos({0.0f, 0.0f});
 	ImGui::SetNextWindowSize({imgui_width, f32(win.height())});
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	if (ImGui::Begin("mikrosim", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar |
-		ImGuiWindowFlags_NoDecoration)) {
+	if (ImGui::Begin("mikrosim", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration)) {
 		ImGui::Text("%u FPS", fps); ImGui::SameLine();
 		if (running) {
 			ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
@@ -239,8 +269,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 8.f, "%.3f");
 		ImGui::SliderFloat("particle draw size", &particle_draw_size, 0.f, 2.f, "%.3f");
 		const f64 tsp = f64(phy_device.physical_device.properties.limits.timestampPeriod);
-		std::vector<std::string> timestamp_names = {"count", "upsweep", "downsweep", "write",
-			"density", "update" };
+		std::vector<std::string> timestamp_names = {"count","prefix","write","density","update","transfer"};
 		if (ImGui::BeginTable("##gpu_timestamps", 3)) {
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn();
@@ -299,6 +328,8 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 }
 void mikrosim_window::on_scroll(f64 dx, f64 dy) {
 	static_cast<void>(dx);
+	if (ImGui::GetIO().WantCaptureMouse)
+		return;
 	view_scale *= glm::pow(inp.is_key_held(GLFW_KEY_LEFT_SHIFT) ? 1.1f : 1.5f, f32(dy));
 	update_view();
 }

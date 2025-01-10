@@ -22,7 +22,7 @@ void main() {
 	uint particle_id = ri + push.off;
 	if (particle_id < push.pcount) {
 		uint type = particles.data[particle_id].type;
-		//if (type != 2) { return; }
+		if (type != 2) { return; }
 		reports.data[ri].pos = particles.data[particle_id].pos;
 		reports.data[ri].vel = particles.data[particle_id].vel;
 	}

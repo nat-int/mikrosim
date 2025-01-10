@@ -5,10 +5,10 @@ option(VULKAN_VALIDATION "vulkan validation layers" ON)
 option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader info messages" ON)
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
 set(FRAMES_IN_FLIGHT 2)
-set(PARTICLE_COUNT 65536)
+set(PARTICLE_COUNT 2048)
 set(CELL_PARTICLE_COUNT 128)
-set(CELLS_X 141)
-set(CELLS_Y 141)
+set(CELLS_X 16)
+set(CELLS_Y 17)
 set(WINDOW_CALLBACK_GENERATOR "on_##name")
 
 if(VULKAN_VALIDATION)
@@ -64,7 +64,7 @@ configure_file(${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp.in ${CMAKE_SOURCE_DIR}/src
 add_executable(mikrosim
 	${CMAKE_SOURCE_DIR}/src/main.cpp
 		${CMAKE_SOURCE_DIR}/src/app.cpp ${CMAKE_SOURCE_DIR}/src/particles.cpp
-		${CMAKE_SOURCE_DIR}/src/cell.cpp
+		${CMAKE_SOURCE_DIR}/src/cell.cpp ${CMAKE_SOURCE_DIR}/src/compounds.cpp
 	${CMAKE_SOURCE_DIR}/src/rendering/window.cpp ${CMAKE_SOURCE_DIR}/src/rendering/context.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/device.cpp ${CMAKE_SOURCE_DIR}/src/rendering/pipeline.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/vma_wrap.cpp ${CMAKE_SOURCE_DIR}/src/rendering/2d.cpp

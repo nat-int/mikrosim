@@ -154,8 +154,12 @@ namespace rend {
 		bool should_stage() const;
 #define CONSTANAN_DEVICE_BUFFER_MAKE_ARGS vk::BufferUsageFlags usage, vk::BufferCreateFlags create_flags={},\
 			vk::SharingMode sharing_mode=vk::SharingMode::eExclusive, const vk::ArrayProxyNoTemporaries<const u32> &queues={}
+#define CONSTANAN_DEVICE_BUFFER_MAKE_ARGS_CPP vk::BufferUsageFlags usage,\
+	vk::BufferCreateFlags create_flags, vk::SharingMode sharing_mode,\
+	const vk::ArrayProxyNoTemporaries<const u32> &queues
 #define CONSTANTAN_DEVICE_BUFFER_MAKE_FROM_ARGS(usage_mixin, alloc_create_flags, alloc_type) \
 			allocator.create_buffer({create_flags, size, usage usage_mixin, sharing_mode, queues}, {alloc_create_flags, alloc_type})
+		vma::buffer make_staging_buffer(u32 size, CONSTANAN_DEVICE_BUFFER_MAKE_ARGS) const;
 		vma::buffer make_device_buffer_dedicated_stage(const void *data, u32 size, CONSTANAN_DEVICE_BUFFER_MAKE_ARGS) const;
 		template<typename T> inline vma::buffer make_device_buffer_dedicated_stage(const T &data, CONSTANAN_DEVICE_BUFFER_MAKE_ARGS) const {
 			return make_device_buffer_dedicated_stage(data.data(), static_cast<u32>(data.size() * sizeof(data[0])), usage, create_flags, sharing_mode, queues);

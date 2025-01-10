@@ -2,6 +2,7 @@
 layout(location=0) in vec2 vpos;
 layout(location=1) in vec2 pos;
 layout(location=2) in uint type;
+layout(location=3) in float conc;
 layout(location=0) out vec2 fvpos;
 layout(location=1) out float fvedge;
 layout(location=2) out vec4 fvcol;
@@ -25,9 +26,14 @@ void main() {
 	const float edges[] = float[3](-1, 1, 0.01);
 	const vec4 colors[] = vec4[3](
 		vec4(0, 0, 0, .5),
-		vec4(.1, .4, 1, 1),
+		vec4(.1, 0, 1, 1),
 		vec4(.5, .1, .8, 1)
 	);
+	const vec4 conc_factor[] = vec4[3](
+		vec4(1, 0, 0, 0),
+		vec4(0, 1, 0, 0),
+		vec4(0, .5, 0, 0)
+	);
 	fvedge = edges[type];
-	fvcol = colors[type];
+	fvcol = colors[type] + conc_factor[type] * conc;
 }

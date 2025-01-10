@@ -17,6 +17,9 @@ layout(std140, set=0, binding=2) readonly buffer indices_t {
 layout(std140, set=0, binding=3) writeonly buffer cell_t {
 	particle_id data[];
 } cells;
+layout(std140, set=0, binding=4) readonly buffer concentrations_t {
+	vec4 data[];
+} concentrations;
 
 void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
@@ -34,6 +37,7 @@ void main() {
 		cells.data[sorted_pos].type = type;
 		cells.data[sorted_pos].vel = vel;
 		cells.data[sorted_pos].id = particle_id;
+		cells.data[sorted_pos].concentration = concentrations.data[particle_id];
 	}
 }
 

@@ -133,6 +133,10 @@ namespace rend {
 		logs::debugln("buffer handler", "staging is ", use_staging ? "on" : "off");
 	}
 	bool buffer_handler::should_stage() const { return use_staging; }
+	vma::buffer buffer_handler::make_staging_buffer(u32 size, CONSTANAN_DEVICE_BUFFER_MAKE_ARGS_CPP) const {
+		return CONSTANTAN_DEVICE_BUFFER_MAKE_FROM_ARGS(, vma::allocation_create_flag_bits::eHostAccessRandom,
+			vma::memory_usage::eAutoPreferHost);
+	}
 	vma::buffer buffer_handler::make_device_buffer_dedicated_stage(const void *data, u32 size, vk::BufferUsageFlags usage, vk::BufferCreateFlags create_flags,
 		vk::SharingMode sharing_mode, const vk::ArrayProxyNoTemporaries<const u32> &queues) const {
 		if (use_staging) {

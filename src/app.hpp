@@ -5,10 +5,17 @@
 #include "rendering/preset.hpp"
 #include "rendering/timestamp.hpp"
 
+struct std140_f32 {
+	alignas(16) f32 v;
+};
+
 class mikrosim_window : public rend::preset::simple_window {
 	static constexpr u32 render_timestamps = 2;
 	bool first_frame;
 	vma::buffer quad_vb, quad_ib;
+	vma::buffer concs_stage;
+	std140_f32 *concs_stage_map;
+	vma::buffer concs_isb;
 	std::vector<vk::raii::CommandBuffer> update_cmds;
 	std::vector<vk::raii::Semaphore> update_semaphores;
 	std::vector<vk::raii::Semaphore> update_render_semaphores;

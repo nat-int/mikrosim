@@ -1,6 +1,8 @@
 #pragma once
 #include <bit>
+#include <memory>
 #include "cell.hpp"
+#include "compounds.hpp"
 #include "rendering/compute.hpp"
 #include "rendering/timestamp.hpp"
 
@@ -27,6 +29,7 @@ private:
 	constexpr static u32 index_buff = 2;
 	constexpr static u32 cell_buff = 3;
 	constexpr static u32 report_buff = 4;
+	constexpr static u32 concs_buff = 5;
 
 	constexpr static u32 count_pl = 0;
 	constexpr static u32 upsweep_pl = 1;
@@ -39,14 +42,20 @@ private:
 	rend::basic_compute_process<sim_frames> proc;
 	vma::buffer cell_stage;
 	particle *cell_stage_map;
+	std::vector<vk::BufferCopy> curr_staged;
+	u32 next_cell_stage;
 	// consistency is not important, approximate values are enough so the data races (gpu-cpu) here are fine
 	vma::buffer reports;
 	particle_report *reports_map;
-	std::vector<vk::BufferCopy> curr_staged;
-	u32 next_cell_stage;
+	vma::buffer concs_upload;
+	glm::vec4 *concs_upload_map;
+	vma::buffer concs_download;
+	glm::vec4 *concs_download_map;
+	u32 next_mix_concs;
 	std::vector<u32> free_cells;
 public:
 	std::array<cell, compile_options::cell_particle_count> cells;
+	std::unique_ptr<compounds> comps;
 	f32 global_density;
 	f32 stiffness;
 	f32 viscosity;
@@ -59,6 +68,7 @@ public:
 	void imgui();
 	u32 pframe() const;
 	vk::Buffer particle_buff() const;
+	void debug_dump() const;
 
 	void spawn_cell(glm::vec2 pos, glm::vec2 vel);
 	void kill_cell(u32 gpu_id);
