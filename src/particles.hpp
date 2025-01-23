@@ -5,6 +5,7 @@
 #include "compounds.hpp"
 #include "rendering/compute.hpp"
 #include "rendering/timestamp.hpp"
+#include "util.hpp"
 
 struct particle {
 	alignas(16) glm::vec2 pos;
@@ -15,6 +16,25 @@ struct particle {
 struct particle_report {
 	alignas(8) glm::vec2 pos;
 	alignas(8) glm::vec2 vel;
+};
+
+struct chem_block {
+	glm::vec2 pos;
+	f32 target_conc;
+	f32 lerp_strength;
+	glm::vec2 extent;
+	f32 hard_delta;
+	uint comp;
+};
+struct force_block {
+	glm::vec2 pos;
+	glm::vec2 extent;
+	glm::vec2 cartesian_force;
+	glm::vec2 polar_force;
+};
+struct update_uniform {
+	force_block fbs[4];
+	chem_block chbs[4];
 };
 
 class particles {
@@ -56,9 +76,14 @@ private:
 public:
 	std::array<cell, compile_options::cell_particle_count> cells;
 	std::unique_ptr<compounds> comps;
+	cpu_timestamps cpu_ts;
 	f32 global_density;
 	f32 stiffness;
 	f32 viscosity;
+	std::array<force_block, 4> force_blocks;
+	std::array<chem_block, 4> chem_blocks;
+	rend::mapped_dedicated_uniform_buffer<update_uniform> blocks_uniform;
+	f32 block_opacity;
 
 	particles(const rend::context &ctx, const vk::raii::Device &device, const rend::buffer_handler &bh,
 		const vk::raii::DescriptorPool &dpool);
@@ -70,7 +95,7 @@ public:
 	vk::Buffer particle_buff() const;
 	void debug_dump() const;
 
-	void spawn_cell(glm::vec2 pos, glm::vec2 vel);
+	usize spawn_cell(glm::vec2 pos, glm::vec2 vel);
 	void kill_cell(u32 gpu_id);
 };
 

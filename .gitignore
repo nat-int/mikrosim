@@ -2,6 +2,7 @@
 /build/**
 /out/*
 !/out/shaders/
+!/out/basic.genome
 !/out/shaders/*.spv
 /src/cmake_defs.hpp
 /src/shaders/settings.glsl

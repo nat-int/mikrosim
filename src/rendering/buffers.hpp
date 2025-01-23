@@ -13,7 +13,7 @@ namespace rend {
 	class mapped_dedicated_uniform_buffer {
 	public:
 		inline mapped_dedicated_uniform_buffer(const vma::allocator &allocator, vk::SharingMode sharing_mode=vk::SharingMode::eExclusive,
-			const vk::ArrayProxyNoTemporaries<const u32> &queues={}) {
+			const vk::ArrayProxyNoTemporaries<const u32> &queues={}) : handle(nullptr) {
 			handle = allocator.create_buffer({{}, sizeof(T), vk::BufferUsageFlagBits::eUniformBuffer, sharing_mode, queues},
 				{ vma::allocation_create_flag_bits::eHostAccessRandom, vma::memory_usage::eAuto });
 			map = static_cast<T *>(handle.map());

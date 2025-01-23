@@ -3,9 +3,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #include "imgui.h"
+#include "imgui/misc/cpp/imgui_stdlib.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
 #pragma clang diagnostic pop
+#include "parse.hpp"
 
 struct particle_draw_push {
 	glm::mat4 proj;
@@ -16,7 +18,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	[](rend::context &ctx) { static_cast<void>(ctx); },
 	[](const rend::window &win, phy_device_m_t &phy_device) {static_cast<void>(win); static_cast<void>(phy_device); }),
 	first_frame(true), quad_vb(nullptr), quad_ib(nullptr), concs_stage(nullptr), concs_isb(nullptr),
-	particle_draw_pll(nullptr), particle_draw_pl(nullptr) {
+	force_quad(nullptr), chem_quad(nullptr), particle_draw_pll(nullptr), particle_draw_pl(nullptr)  {
 	win.set_user_pointer(this);
 	std::vector<vk::DescriptorPoolSize> dpool_sizes = {
 		{vk::DescriptorType::eStorageBuffer, compile_options::frames_in_flight * 128},
@@ -75,6 +77,14 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		phy_device.physical_device.properties.limits.timestampPeriod);
 
 	p.emplace(ctx, device, *buffer_h, dpool);
+	std::vector<rend::vertex2d> force_quad_vd = rend::quad6v2d({-1.f, -1.f}, {1.f, 1.f},
+		{1.f, 0.f, 0.f, p->block_opacity});
+	force_quad = buffer_h->make_device_buffer_dedicated_stage(force_quad_vd,
+		vk::BufferUsageFlagBits::eVertexBuffer);
+	std::vector<rend::vertex2d> chem_quad_vd = rend::quad6v2d({-1.f, -1.f}, {1.f, 1.f},
+		{0.f, 1.f, 0.f, p->block_opacity});
+	chem_quad = buffer_h->make_device_buffer_dedicated_stage(chem_quad_vd,
+		vk::BufferUsageFlagBits::eVertexBuffer);
 
 	running = false;
 	view_scale = 400.f / compile_options::cells_x;
@@ -82,6 +92,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	update_view();
 	win.bind_scroll_callback<mikrosim_window>();
 	particle_draw_size = .6f;
+	disp_compound = 0;
 
 	prev_frame = 0.f;
 	dt = 0.f;
@@ -115,6 +126,8 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		if (res < 0) std::exit(1);
 	};
 	ImGui_ImplVulkan_Init(&imgui_vk);
+
+	pv.set_rand(*p->comps, 42);
 }
 void mikrosim_window::terminate() {
 	device.waitIdle();
@@ -162,7 +175,7 @@ void mikrosim_window::loop() {
 			static_cast<void>(cmd.begin(vk::CommandBufferBeginInfo{}));
 			if (rframe == 0) {
 				for (usize i = 0; i < compile_options::particle_count; i++) {
-					concs_stage_map[i].v = p->comps->at(0, i);
+					concs_stage_map[i].v = p->comps->at(disp_compound, i);
 				}
 				cmd.copyBuffer(*concs_stage, *concs_isb, {{0, 0, sizeof(std140_f32) *
 					compile_options::particle_count}});
@@ -184,28 +197,66 @@ void mikrosim_window::loop() {
 }
 void mikrosim_window::update() {
 	bool pos_upd = false;
-	if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_MIDDLE) &&
-		!inp.is_mouse_down(GLFW_MOUSE_BUTTON_MIDDLE)) {
-		view_position -= inp.get_cursor_delta() / view_scale;
+	if (cv.follow && cv.c->s == cell::state::active) {
+		view_position = cv.c->pos;
 		pos_upd = true;
 	}
-	if (inp.is_key_held(GLFW_KEY_A)) { view_position.x -= 100.f*dt/view_scale; pos_upd = true; }
-	if (inp.is_key_held(GLFW_KEY_D)) { view_position.x += 100.f*dt/view_scale; pos_upd = true; }
-	if (inp.is_key_held(GLFW_KEY_W)) { view_position.y -= 100.f*dt/view_scale; pos_upd = true; }
-	if (inp.is_key_held(GLFW_KEY_S)) { view_position.y += 100.f*dt/view_scale; pos_upd = true; }
+	if (!ImGui::GetIO().WantCaptureMouse) {
+		if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_MIDDLE) &&
+			!inp.is_mouse_down(GLFW_MOUSE_BUTTON_MIDDLE)) {
+			view_position -= inp.get_cursor_delta() / view_scale;
+			pos_upd = true;
+		}
+		if (inp.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT)) {
+			glm::vec2 cursor = (inp.get_cursor_pos() - glm::vec2{win.width(), win.height()} * .5f) /
+				view_scale + view_position;
+			f32 min_sqdist = 100.f;
+			for (usize i = 0; i < compile_options::cell_particle_count; i++) {
+				if (p->cells[i].s == cell::state::active) {
+					glm::vec2 d = cursor - p->cells[i].pos;
+					if (glm::dot(d, d) < min_sqdist) {
+						min_sqdist = glm::dot(d, d);
+						cv.c = &p->cells[i];
+					}
+				}
+			}
+		}
+	}
+	if (!ImGui::GetIO().WantCaptureKeyboard) {
+		if (inp.is_key_held(GLFW_KEY_A)) { view_position.x -= 100.f*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_held(GLFW_KEY_D)) { view_position.x += 100.f*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_held(GLFW_KEY_W)) { view_position.y -= 100.f*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_held(GLFW_KEY_S)) { view_position.y += 100.f*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_down(GLFW_KEY_SPACE)) {
+			running = !running;
+		}
+		if (inp.is_key_down(GLFW_KEY_N) && !cv.c->genome.empty()) {
+			// TODO: bug - when spawning a cell without loading a genome first, the concentrations in it become nan
+			// adding that thing to position fixes cells spawning at -nan when in starting
+			// view for some reason, probably glm being weird with types??
+			usize id = p->spawn_cell(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
+			p->cells[id].genome = cv.c->genome; // copy genome from cell view
+			p->cells[id].analyze(*p->comps);
+		}
+		if (inp.is_key_down(GLFW_KEY_B)) {
+			for (usize i = 0; i < block_count; i++) {
+				for (usize j = 0; j < compile_options::particle_count; j++) {
+					p->comps->at(p->comps->atoms_to_id[block_compounds[i]], j) = 1.f;
+				}
+			}
+		}
+		if (inp.is_key_down(GLFW_KEY_G)) {
+			for (usize i = 0; i < compile_options::particle_count; i++) {
+				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = 1.f;
+				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = 1.f;
+			}
+		}
+		if (inp.is_key_down(GLFW_KEY_F12) && !buffer_h->should_stage()) {
+			running = false;
+			p->debug_dump();
+		}
+	}
 	if (pos_upd) { update_view(); }
-	if (inp.is_key_down(GLFW_KEY_SPACE)) {
-		running = !running;
-	}
-	if (inp.is_key_down(GLFW_KEY_N)) {
-		// adding that thing to position fixes cells spawning at -nan when in starting
-		// view for some reason, probably glm being weird with types??
-		p->spawn_cell(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
-	}
-	if (inp.is_key_down(GLFW_KEY_F12)) {
-		running = false;
-		p->debug_dump();
-	}
 }
 void mikrosim_window::advance_sim(u32 rframe) {
 	u32 pframe = p->pframe();
@@ -250,6 +301,20 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	cmd.bindVertexBuffers(0, {*quad_vb, particle_buff, *concs_isb}, {0, 0, 0});
 	cmd.drawIndexed(6, compile_options::particle_count, 0, 0, 0);
 
+	rend2d->bind_solid_pipeline(cmd);
+	for (usize i = 0; i < 4; i++) {
+		rend2d->push_projection(cmd, glm::scale(
+			glm::translate(vp, glm::vec3(p->force_blocks[i].pos, 0.f)),
+			glm::vec3(p->force_blocks[i].extent, 1.f)));
+		cmd.bindVertexBuffers(0, *force_quad, {0});
+		cmd.draw(6, 1, 0, 0);
+		rend2d->push_projection(cmd, glm::scale(
+			glm::translate(vp, glm::vec3(p->chem_blocks[i].pos, 0.f)),
+			glm::vec3(p->chem_blocks[i].extent, 1.f)));
+		cmd.bindVertexBuffers(0, *chem_quad, {0});
+		cmd.draw(6, 1, 0, 0);
+	}
+
 	win.set_viewport_and_scissor(cmd);
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -257,7 +322,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	ImGui::SetNextWindowPos({0.0f, 0.0f});
 	ImGui::SetNextWindowSize({imgui_width, f32(win.height())});
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	if (ImGui::Begin("mikrosim", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration)) {
+	if (ImGui::Begin("mikrosim", nullptr, ImGuiWindowFlags_NoMove)) {
 		ImGui::Text("%u FPS", fps); ImGui::SameLine();
 		if (running) {
 			ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
@@ -272,12 +337,9 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		std::vector<std::string> timestamp_names = {"count","prefix","write","density","update","transfer"};
 		if (ImGui::BeginTable("##gpu_timestamps", 3)) {
 			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("event");
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("timestamp");
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("delta");
+			ImGui::TableNextColumn(); ImGui::TableHeader("event");
+			ImGui::TableNextColumn(); ImGui::TableHeader("timestamp");
+			ImGui::TableNextColumn(); ImGui::TableHeader("delta");
 			for (u32 i = 1; i < particles::timestamps; i++) {
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
@@ -287,38 +349,112 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 				ImGui::TableNextColumn();
 				ImGui::Text("%s", format_time(compute_ts.delta(i, i-1, tsp)).c_str());
 			}
+			ImGui::EndTable();
 		}
-		ImGui::EndTable();
-		if (ImGui::BeginTable("##gpu_timestamps2", 3)) {
+		if (ImGui::BeginTable("##timestamps", 3)) {
 			static constexpr u64 sns = 1'000'000'000ull;
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn();
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("time");
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("rate (Hz)");
+			ImGui::TableNextColumn(); ImGui::TableHeader("time");
+			ImGui::TableNextColumn(); ImGui::TableHeader("rate (Hz)");
 			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("simulation");
-			ImGui::TableNextColumn();
+			ImGui::TableNextColumn(); ImGui::TableHeader("sim (cpu)");
+			u64 cpud = p->cpu_ts.times.back();
+			ImGui::TableNextColumn(); ImGui::Text("%s", format_time(cpud).c_str());
+			ImGui::TableNextColumn(); ImGui::Text("%" PRIu64, cpud > 0 ? sns / cpud : 0);
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn(); ImGui::TableHeader("simu (gpu)");
 			u64 cd = compute_ts.delta(particles::timestamps-1, 0, tsp);
-			ImGui::Text("%s", format_time(cd).c_str());
-			ImGui::TableNextColumn();
-			ImGui::Text("%" PRIu64, cd > 0 ? sns / cd : 0);
+			ImGui::TableNextColumn(); ImGui::Text("%s", format_time(cd).c_str());
+			ImGui::TableNextColumn(); ImGui::Text("%" PRIu64, cd > 0 ? sns / cd : 0);
 			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-			ImGui::TableHeader("render (gpu)");
-			ImGui::TableNextColumn();
+			ImGui::TableNextColumn(); ImGui::TableHeader("render (gpu)");
 			u64 rd = render_ts.delta(render_timestamps-1, 0, tsp);
-			ImGui::Text("%s", format_time(rd).c_str());
-			ImGui::TableNextColumn();
-			ImGui::Text("%" PRIu64, rd > 0 ? sns / rd : 0);
+			ImGui::TableNextColumn(); ImGui::Text("%s", format_time(rd).c_str());
+			ImGui::TableNextColumn(); ImGui::Text("%" PRIu64, rd > 0 ? sns / rd : 0);
+			ImGui::EndTable();
 		}
+	}
+	// c++ even requires 2's complement now so it should be fine to type alias (u32-i32)
+	ImGui::SliderInt("shown compund", reinterpret_cast<i32 *>(&disp_compound), 0, compounds::count-1);
+	if (ImGui::BeginTable("##compound_info", 2)) {
+		const auto &info = p->comps->infos[disp_compound];
+		ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("image");
+		ImGui::TableNextColumn(); info.imgui();
+		ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("energy");
+		ImGui::TableNextColumn(); ImGui::Text("%" PRIu16, info.energy);
 		ImGui::EndTable();
 	}
 	ImGui::End();
 	ImGui::PopStyleVar();
 	p->imgui();
+	pv.draw(*p->comps);
+	cv.draw(*p->comps, pv);
+	if (ImGui::Begin("extra info")) {
+		if (ImGui::BeginTable("##prot_blocks", 16)) {
+			ImGui::TableNextRow();
+			for (u8 i = 0; i < 16; i++) {
+				ImGui::TableNextColumn();
+				ImGui::TableHeader(std::string(1, quads_chr[i]).c_str());
+			}
+			ImGui::TableNextRow();
+			for (u8 i = 0; i < 16; i++) {
+				ImGui::TableNextColumn();
+				p->comps->infos[p->comps->atoms_to_id[block_compounds[i % block_count]]].imgui();
+			}
+			ImGui::EndTable();
+		}
+	}
+	ImGui::End();
+	if (ImGui::Begin("effect blocks")) {
+		ImGui::InputText("load path", &blocks_load_path);
+		ImGui::SameLine();
+		if (ImGui::Button("load")) {
+			auto bl = load_blocks(blocks_load_path);
+			p->force_blocks = bl.first;
+			p->chem_blocks = bl.second;
+		}
+		ImGui::InputText("save path", &blocks_save_path);
+		ImGui::SameLine();
+		if (ImGui::Button("save")) {
+			save_blocks(blocks_save_path, {p->force_blocks, p->chem_blocks});
+		}
+		ImGui::Separator();
+		//ImGui::SliderFloat("block opacity", &p->block_opacity, 0.f, 1.f);
+		static constexpr f32 max = std::max(f32(compile_options::cells_x), f32(compile_options::cells_y));
+		for (usize i = 0; i < 4; i++) {
+			std::string name = "force block "+std::to_string(i);
+			ImGui::PushID(name.c_str());
+			ImGui::Text("%s", name.c_str());
+			ImGui::SliderFloat2("position", &p->force_blocks[i].pos.x, 0.f, max);
+			ImGui::SliderFloat2("extent", &p->force_blocks[i].extent.x, 0.f, max);
+			ImGui::SliderFloat2("force xy", &p->force_blocks[i].cartesian_force.x, -1.f, 1.f);
+			ImGui::SliderFloat2("force phi r", &p->force_blocks[i].polar_force.x, -1.f, 1.f);
+			ImGui::PopID();
+		}
+		for (usize i = 0; i < 4; i++) {
+			std::string name = "chem block "+std::to_string(i);
+			ImGui::PushID(name.c_str());
+			ImGui::Text("%s", name.c_str());
+			ImGui::SliderFloat2("position", &p->chem_blocks[i].pos.x, 0.f, max);
+			ImGui::SliderFloat2("extent", &p->chem_blocks[i].extent.x, 0.f, max);
+			ImGui::SliderFloat("target conc", &p->chem_blocks[i].target_conc, 0.f, 4.f);
+			ImGui::SliderFloat("strength", &p->chem_blocks[i].lerp_strength, 0.f, 1.f);
+			ImGui::SliderFloat("direct add", &p->chem_blocks[i].hard_delta, -1.f, 1.f);
+			ImGui::SliderInt("compound", reinterpret_cast<i32 *>(&p->chem_blocks[i].comp), 0, compounds::count);
+			ImGui::PopID();
+		}
+	}
+	ImGui::End();
+	if (ImGui::Begin("controls")) {
+		ImGui::Text("[;] step simulation\n[ ] (space) start/stop simulation\n"
+			"drag with scroll wheel pressed - pan view\n[W][S][A][D] - move view\n"
+			"scroll - zoom\n[shift]+scroll - zoom (slower)\n"
+			"[N] - spawn new cell with genome copied from cell view\n"
+			"[B] - set all block concentrations to 1 everywhere\n"
+			"[G] - set all genome compound concentrations to 1 everywhere");
+	}
+	ImGui::End();
 	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 

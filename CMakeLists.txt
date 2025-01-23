@@ -5,10 +5,10 @@ option(VULKAN_VALIDATION "vulkan validation layers" ON)
 option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader info messages" ON)
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
 set(FRAMES_IN_FLIGHT 2)
-set(PARTICLE_COUNT 2048)
-set(CELL_PARTICLE_COUNT 128)
-set(CELLS_X 16)
-set(CELLS_Y 17)
+set(PARTICLE_COUNT 32768)
+set(CELL_PARTICLE_COUNT 512)
+set(CELLS_X 100)
+set(CELLS_Y 100)
 set(WINDOW_CALLBACK_GENERATOR "on_##name")
 
 if(VULKAN_VALIDATION)
@@ -36,6 +36,10 @@ find_package(glfw3 3.3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS glslc)
 find_package(VulkanMemoryAllocator REQUIRED)
 find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
+if(POLICY CMP0167)
+	cmake_policy(SET CMP0167 NEW)
+endif()
+find_package(Boost REQUIRED COMPONENTS math_tr1f)
 
 add_compile_definitions(GLM_FORCE_RADIANS=1 GLM_FORCE_DEPTH_ZERO_TO_ONE=1 GLM_ENABLE_EXPERIMENTAL=1)
 
@@ -65,6 +69,8 @@ add_executable(mikrosim
 	${CMAKE_SOURCE_DIR}/src/main.cpp
 		${CMAKE_SOURCE_DIR}/src/app.cpp ${CMAKE_SOURCE_DIR}/src/particles.cpp
 		${CMAKE_SOURCE_DIR}/src/cell.cpp ${CMAKE_SOURCE_DIR}/src/compounds.cpp
+		${CMAKE_SOURCE_DIR}/src/protein.cpp ${CMAKE_SOURCE_DIR}/src/views.cpp
+		${CMAKE_SOURCE_DIR}/src/parse.cpp
 	${CMAKE_SOURCE_DIR}/src/rendering/window.cpp ${CMAKE_SOURCE_DIR}/src/rendering/context.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/device.cpp ${CMAKE_SOURCE_DIR}/src/rendering/pipeline.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/vma_wrap.cpp ${CMAKE_SOURCE_DIR}/src/rendering/2d.cpp
@@ -74,10 +80,9 @@ add_executable(mikrosim
 	${CMAKE_SOURCE_DIR}/src/input/input.cpp
 	${CMAKE_SOURCE_DIR}/src/util.cpp
 	${CMAKE_SOURCE_DIR}/src/imgui_impl.cpp)
-target_include_directories(mikrosim PUBLIC ${CMAKE_SOURCE_DIR}/submodules/ ${CMAKE_SOURCE_DIR}/submodules/imgui/)
-target_link_libraries(mikrosim PUBLIC glfw3 vulkan glm GPUOpen::VulkanMemoryAllocator)
+target_include_directories(mikrosim PUBLIC ${CMAKE_SOURCE_DIR}/submodules/ ${CMAKE_SOURCE_DIR}/submodules/imgui/ ${Boost_INCLUDE_DIRS})
+target_link_libraries(mikrosim PUBLIC glfw3 vulkan glm GPUOpen::VulkanMemoryAllocator ${Boost_LIBRARIES})
 target_precompile_headers(mikrosim PUBLIC ${CMAKE_SOURCE_DIR}/src/vulkan_glfw_pch.hpp)
-target_compile_options(mikrosim PUBLIC ${WARN})
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 	target_compile_options(mikrosim PUBLIC -Wall -Wextra -Wpedantic -Wno-class-memaccess)
 	target_compile_options(mikrosim PRIVATE -fdiagnostics-color=always)

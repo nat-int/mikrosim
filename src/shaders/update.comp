@@ -2,29 +2,46 @@
 #include "settings.glsl"
 
 layout(local_size_x=64) in;
-layout(push_constant) uniform push_t {
+struct ch_bl {
+	vec2 pos;
+	float tconc;
+	float strength;
+	vec2 ext;
+	float delta;
+	uint comp;
+};
+struct f_bl {
+	vec4 pos_ext;
+	vec4 cart_polar;
+};
+layout(push_constant, std430) uniform push_t {
+	uvec4 mix_comps;
 	uint pcount;
 	float global_density;
 	float stiffness;
 	float viscosity;
 } push;
-layout(std140, set=0, binding=0) readonly buffer particles_t {
+layout(std140, set=0, binding=0) uniform uniform_t {
+	f_bl fbl[4];
+	ch_bl chbl[4];
+} unif;
+layout(std140, set=0, binding=1) readonly buffer particles_t {
 	particle data[];
 } particles;
-layout(std140, set=0, binding=1) writeonly buffer particles_next_t {
+layout(std140, set=0, binding=2) writeonly buffer particles_next_t {
 	particle data[];
 } particles_next;
-layout(std140, set=0, binding=2) readonly buffer counts_t {
+layout(std140, set=0, binding=3) readonly buffer counts_t {
 	uint data[];
 } counts;
-layout(std140, set=0, binding=3) readonly buffer cell_t {
+layout(std140, set=0, binding=4) readonly buffer cell_t {
 	particle_id data[];
 } cells;
-layout(std140, set=0, binding=4) writeonly buffer concentrations_t {
+layout(std140, set=0, binding=5) writeonly buffer concentrations_t {
 	vec4 data[];
 } concentrations;
 
-const vec2 MAX_SPEED = vec2(0.1, 0.1);
+const vec2 MAX_SPEED = vec2(0.2, 0.2);
 
 float density_contribution(float dist) {
 	const float norm_const = 2 / 3.1415926535897; // from wolfram alpha with Integrate[(1-r)^3,{r,0,1},{a,0,2pi}] :)
@@ -111,11 +128,25 @@ void main() {
 		}
 		concentrations.data[particle_id] = concs;
 
+		for (uint i = 0; i < 4; i++) {
+			vec2 rp = unif.fbl[i].pos_ext.xy - pos;
+			if (all(lessThan(abs(rp), unif.fbl[i].pos_ext.zw))) {
+				vel += unif.fbl[i].cart_polar.xy;
+				vel += mat2(vec2(-rp.y, rp.x), rp) * unif.fbl[i].cart_polar.zw;
+			}
+		}
+		for (uint i = 0; i < 4; i++) {
+			for (uint j = 0; j < 4; j++) {
+				if (push.mix_comps[j] == unif.chbl[i].comp &&
+					all(lessThan(abs(unif.chbl[i].pos - pos), unif.chbl[i].ext))) {
+					concentrations.data[particle_id][j] = max(0.f,
+						mix(concs[j], unif.chbl[i].tconc, unif.chbl[i].strength) + unif.chbl[i].delta);
+				}
+			}
+		}
+
 		vel = clamp(vel, -MAX_SPEED, MAX_SPEED);
 		pos += vel;
-		const vec2 center = vec2(CELLS_X * .5, CELLS_Y * .5);
-		vec2 center_offset = vec2(adj_pos - center);
-		vel += normalize(center_offset.yx * vec2(-1, 1) + center_offset) * 0.00001;
 		if (pos.x > CELLS_X) { pos.x = 2*CELLS_X - pos.x; vel.x = -vel.x; }
 		if (pos.x < 0) { pos.x = -pos.x; vel.x = -vel.x; }
 		if (pos.y > CELLS_Y) { pos.y = 2*CELLS_Y - pos.y; vel.y = -vel.y; }

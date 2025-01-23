@@ -1,8 +1,10 @@
+#include <stdlib.h>
 #include "app.hpp"
 
 int main() {
-		mikrosim_window w;
-		w.loop();
-		return 0;
+	srand(u32(time(nullptr)));
+	mikrosim_window w;
+	w.loop();
+	return 0;
 }
 

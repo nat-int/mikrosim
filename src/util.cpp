@@ -72,11 +72,24 @@ std::u32string utf8_to_utf32(std::string_view s) {
 	return out;
 }
 
+void cpu_timestamps::start() {
+	times.clear();
+	start_time = clock::now();
+}
+void cpu_timestamps::stamp() {
+	times.push_back(u64(std::chrono::duration_cast<std::chrono::nanoseconds>(clock::now() - start_time).count()));
+}
+
 std::string format_time(u64 ns) {
 	constexpr static const char *pfx[] = { "ns", "us", "ms", "s", "min", "h", "d", "y" };
 	constexpr static const u64 factors[] = { 1000, 1000, 1000, 60, 60, 24, 365, 0xffffffffu };
 	usize i = 0;
 	for (; ns >= factors[i] * 3; i++) { ns /= factors[i]; }
 	return std::to_string(ns) + pfx[i];
+}
+
+f32 randf() {
+	if constexpr (RAND_MAX > 0xffffu) { return (u32(rand()) % 0xffffu) / f32(0xffffu); }
+	else { return f32(rand()) / f32(RAND_MAX); }
 }
 
