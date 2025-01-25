@@ -45,11 +45,13 @@ void main() {
 
 		uint terminator = 128;
 		float density = 0;
+		float mix_density = 0;
 		for (uint i = top_range.x; i < top_range.y; i++) {
 			vec2 rp = cells.data[i].pos - adj_pos;
 			float dist = max(length(rp), 0.0001);
 			if (dist < 1.0) {
 				density += density_contribution(dist);
+				mix_density += mix_factors[cells.data[i].type];
 			}
 			if (terminator < 1)
 				break;
@@ -60,6 +62,7 @@ void main() {
 			float dist = max(length(rp), 0.0001);
 			if (dist < 1.0) {
 				density += density_contribution(dist);
+				mix_density += mix_factors[cells.data[i].type];
 			}
 			if (terminator < 1)
 				break;
@@ -70,6 +73,7 @@ void main() {
 			float dist = max(length(rp), 0.0001);
 			if (dist < 1.0) {
 				density += density_contribution(dist);
+				mix_density += mix_factors[cells.data[i].type];
 			}
 			if (terminator < 1)
 				break;
@@ -78,6 +82,7 @@ void main() {
 
 		particles.data[particle_id].density = density;
 		cells.data[sorted_pos].density = density;
+		cells.data[sorted_pos].concentration *= 1 / mix_density;
 	}
 }
 

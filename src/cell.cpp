@@ -9,14 +9,16 @@
 #include "log/log.hpp"
 #include "util.hpp"
 
+static constexpr u32 max_health = 1000;
+
 cell::cell() : s(state::none) { }
 cell::cell(u32 gi, glm::vec2 p, glm::vec2 v) : s(state::active), gpu_id(gi), pos(p), vel(v),
-	division_pos(0), next_update(0), next_create(0), age(0.f) {
+	division_pos(0), next_update(0), next_create(0), health(max_health) {
 }
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 void cell::update(compounds &comps, bool protein_create) {
-	age += .01f;
+	health--;
 	if (proteins.empty()) return;
 	if (protein_create) {
 		create_tick(comps, proteins[next_create]);
@@ -64,6 +66,9 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 		if (info.is_genome_polymerase && info.energy_balance < 0) {
 			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
 				special_action::division, info.energy_balance};
+		} else if (info.is_genome_repair && info.energy_balance < 0) {
+			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
+				special_action::repair, info.energy_balance};
 		} else {
 			e = chem_protein{info.reaction_input, info.reaction_output, K};
 		}
@@ -88,7 +93,12 @@ void cell::analyze(const compounds &comps) {
 	bound_factors.resize(genome.size(), 0.f);
 	if (genome.size() < 6) return;
 	for (usize i = 0; i < genome.size() - 6; i++) {
-		if (std::find(genome.begin()+i64(i), genome.begin()+i64(i)+6, true) == genome.begin()+i64(i)+6) {
+		bool is_start = true;
+		for (usize j = 0; j < 6; j++) {
+			if (genome[i+j])
+				is_start = false;
+		}
+		if (is_start) {
 			add_protein_rec(comps, i+6, true);
 			i += 5;
 		}
@@ -102,7 +112,7 @@ void cell::create_tick(compounds &comps, protein &prot) {
 	f32 denat = .05f * prot.conc; // TODO: some stability constant determined by folder
 	f32 create_pos = prot.direct_transcription ? 1.f : -bound_factors[prot.genome_start];
 	for (usize i = prot.genome_start + 1; i < prot.genome_end; i++) {
-		create_pos -= bound_factors[prot.genome_start];
+		create_pos -= std::max(bound_factors[i], 0.f); // only negative factors afterwards
 	}
 	f32 max_create = 1.f;
 	for (usize i = 0; i < block_count; i++) {
@@ -116,8 +126,6 @@ void cell::create_tick(compounds &comps, protein &prot) {
 	for (usize i = 0; i < block_count; i++) { // "denaturated" "proteins" "decompose" instantly :)
 		comps.at(comps.atoms_to_id[block_compounds[i]], gpu_id) -= delta * prot.cost[i];
 	}
-	if (std::holds_alternative<special_chem_protein>(prot.effect))
-		logs::debugln("cell", "create tick denat ", denat, " create_pos ", create_pos, " max_create ", max_create, " create ", create, " delta ", delta, " prot conc ", prot.conc);
 }
 void cell::update_tick(compounds &comps, protein &prot) {
 	f32 cata_effect = 1.f;
@@ -157,8 +165,6 @@ void cell::update_tick(compounds &comps, protein &prot) {
 			}
 		},
 		[this, &comps, &prot, cata_effect](special_chem_protein &scp) {
-			if (comps.locked[comps.atoms_to_id[g0_comp]]) { return; }
-			if (comps.locked[comps.atoms_to_id[g1_comp]]) { return; }
 			for (u8 c : scp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : scp.outputs) { if (comps.locked[c]) return; }
 			f32 delta = reaction_delta(comps, prot, cata_effect, scp.K, scp.inputs, scp.outputs);
@@ -168,6 +174,8 @@ void cell::update_tick(compounds &comps, protein &prot) {
 			f32 spent_energy = 0.f;
 			switch (scp.act) {
 			case special_action::division:{
+				if (comps.locked[comps.atoms_to_id[g0_comp]]) { return; }
+				if (comps.locked[comps.atoms_to_id[g1_comp]]) { return; }
 				static constexpr f32 bit_cost = 1.f / 4096.f;
 				static constexpr f32 incorrect_unbind_chance = 0.995f;
 				f32 &zero_conc = comps.at(comps.atoms_to_id[g0_comp], gpu_id);
@@ -179,7 +187,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 						conc -= bit_cost;
 					}
 				};
-				for (; division_pos < genome.size() && spent_energy < energy - .01f; spent_energy += .01f) {
+				for (; division_pos < genome.size() && spent_energy < energy - .03f; spent_energy += .03f) {
 					f32 conc_sum = zero_conc + one_conc;
 					if (conc_sum < bit_cost * 64.f)
 						break;
@@ -211,6 +219,11 @@ void cell::update_tick(compounds &comps, protein &prot) {
 						division_pos++;
 					}
 				}
+				} break;
+			case special_action::repair:{
+				const u32 repair = u32(std::max(i32(energy * 100.f), 0));
+				health = std::min(health + repair, max_health);
+				spent_energy = f32(repair) * .01f;
 				} break;
 			default: return;
 			}

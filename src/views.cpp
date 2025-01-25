@@ -91,6 +91,9 @@ void protein_view::draw(const compounds &comps) {
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is genome polymerase");
 			ImGui::TableNextColumn();
 			ImGui::Text("%s", (info.is_genome_polymerase ? "yes" : "no"));
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is genome repair");
+			ImGui::TableNextColumn();
+			ImGui::Text("%s", (info.is_genome_repair ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is positive factor");
 			ImGui::TableNextColumn();
 		 	ImGui::Text("%s", (info.is_positive_factor ? "yes" : "no"));
@@ -209,6 +212,8 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			ImGui::TableNextColumn(); ImGui::Text("%.3lf %.3lf", f64(c->vel.x), f64(c->vel.y));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("division progress");
 			ImGui::TableNextColumn(); ImGui::Text("%zu / %zu", c->division_pos, c->genome.size());
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("health");
+			ImGui::TableNextColumn(); ImGui::Text("%" PRIu32, c->health);
 			ImGui::EndTable();
 		}
 		ImGui::Checkbox("follow", &follow);
@@ -249,6 +254,7 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 					[](special_chem_protein &scp) {
 						switch (scp.act) {
 						case special_action::division: ImGui::Text("genome polymerase"); break;
+						case special_action::repair: ImGui::Text("genome repair"); break;
 						default: ImGui::Text("unknown special action!"); break;
 						}
 					},
@@ -261,14 +267,15 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 		ImDrawList *draw_list = ImGui::GetWindowDrawList();
 		ImVec2 pos = ImGui::GetCursorScreenPos();
 		constexpr static f32 spy = 7.f;
+		constexpr static usize llen = 100;
 		const bool hover_tf = hovered_prot < c->proteins.size() &&
 			std::holds_alternative<transcription_factor>(c->proteins[hovered_prot].effect);
 		const std::optional<const transcription_factor *> hover_tf_extract = hover_tf ?
 			std::optional<const transcription_factor *>(
 				&std::get<transcription_factor>(c->proteins[hovered_prot].effect)) : std::nullopt;
-		for (usize i = 0; i < (c->genome.size() + 149) / 150; i++) {
-			for (usize j = 0; j < 150; j++) {
-				const usize k = 150 * i + j;
+		for (usize i = 0; i < (c->genome.size() + llen-1) / llen; i++) {
+			for (usize j = 0; j < llen; j++) {
+				const usize k = llen * i + j;
 				if (k < c->genome.size()) {
 					draw_list->AddLine({pos.x + f32(j) * 3.f, pos.y + f32(i) * spy},
 						{pos.x + f32(j + 1) * 3.f, pos.y + f32(i) * spy},
@@ -294,7 +301,7 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 				}
 			}
 		}
-		ImGui::Dummy({151.f, f32(u32((c->genome.size()+149) / 150)) * spy});
+		ImGui::Dummy({151.f, f32(u32((c->genome.size()+llen-1) / llen)) * spy});
 		ImGui::Separator();
 		ImGui::InputText("file", &file_path);
 		ImGui::SameLine();

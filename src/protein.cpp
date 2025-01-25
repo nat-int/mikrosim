@@ -180,6 +180,17 @@ protein_info folder::analyze(const compounds &comp) const {
 		active_sites.erase(active_sites.begin() + (g1i - comps.begin()));
 		comps.erase(g1i);
 	}
+	// if there's 4+ long genome site and "nucleotid" active site (g0 goes first), then it's genome repair
+	else if (max_genome_site.size() > 3 && (g0i != comps.end() || g1i != comps.end())) {
+		out.is_genome_repair = true;
+		if (g0i != comps.end()) {
+			active_sites.erase(active_sites.begin() + (g0i - comps.begin()));
+			comps.erase(g0i);
+		} else {
+			active_sites.erase(active_sites.begin() + (g1i - comps.begin()));
+			comps.erase(g1i);
+		}
+	}
 	// find reactions at each site
 	std::vector<bool> used(active_sites.size(), false);
 	for (usize i = 0; i < active_sites.size(); i++) {

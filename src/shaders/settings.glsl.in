@@ -12,5 +12,6 @@ struct particle_id {
 	uint id;
 	vec4 concentration;
 };
+const float mix_factors[] = float[4](0,1,1,0);
 const uint CELLS_X = ${CELLS_X};
 const uint CELLS_Y = ${CELLS_Y};

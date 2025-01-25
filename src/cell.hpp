@@ -21,7 +21,7 @@ public:
 	std::vector<protein> proteins;
 	usize next_update;
 	usize next_create;
-	f32 age;
+	u32 health;
 
 	cell();
 	cell(u32 gi, glm::vec2 p, glm::vec2 v);

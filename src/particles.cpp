@@ -167,7 +167,7 @@ void particles::step_cpu() {
 			cells[i].pos = reports_map[i].pos;
 			cells[i].vel = reports_map[i].vel;
 			cells[i].update(*comps, protein_creation);
-			if (randf() * cells[i].age > 100.f) {
+			if (cells[i].health < 1) {
 				kill_cell(cells[i].gpu_id);
 			} else if (cells[i].division_pos >= cells[i].genome.size()) {
 				cells[i].division_pos = 0;
@@ -176,6 +176,7 @@ void particles::step_cpu() {
 					cells[i].division_genome.clear();
 					continue;
 				}
+				cells[ci].health = (cells[i].health + cells[ci].health) / 2;
 				cells[ci].genome.swap(cells[i].division_genome);
 				cells[ci].analyze(*comps);
 			}

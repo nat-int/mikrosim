@@ -1,9 +1,10 @@
-FFFFFF aa19c6a80100e
-FFFFFF aa03088fdf8ae
-FFFFFF a7084ab91bda5e
-FFFFFF a4b6d4d81b2c9393ce
 FFFFFF ac6c523c1397732d6e
+FFFFFF a7084ab91bda5e
+FFFFFF ac5246947b472849c158148b67092a6e ; genome polymerase (gets energy from 9)
+FFFFFF a4b6d4d81b2c9393ce
+FFFFFF aa03088fdf8ae
 FFFFFF ad5d3c70a575dfb94e
+FFFFFF a0690a286cf6c6626d3d6de ; genome repair (gets energy from 9)
 FFFFFF a3d1c0c521f185949e
 FFFFFF a6db0b80a55355551e
-FFFFFF ac5246947b472849c158148b67092a6e ; genome polymerase (gets energy from 9)
+FFFFFF aa19c6a80100e

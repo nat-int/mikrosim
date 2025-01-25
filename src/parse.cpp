@@ -10,7 +10,7 @@ std::vector<bool> load_genome(const std::string &file) {
 	}
 	std::vector<bool> out;
 	char c;
-	while (f >> c) {
+	while (f.get(c)) {
 		switch (c) {
 		case 'T': out.push_back(true); break;
 		case 'F': out.push_back(false); break;
@@ -30,7 +30,7 @@ std::vector<bool> load_genome(const std::string &file) {
 		case 'd': out.insert(out.end(), {true, false, true, true}); break;
 		case 'e': out.insert(out.end(), {false, true, true, true}); break;
 		case 'f': out.insert(out.end(), {true, true, true, true}); break;
-		case ';': while (f >> c) { if (c == '\n') break; } break;
+		case ';': while (f.get(c)) { if (c == '\n') break; } break;
 		default: break;
 		}
 	}

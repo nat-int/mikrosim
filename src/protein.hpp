@@ -55,6 +55,7 @@ struct protein_info {
 	std::vector<u8> reaction_output;
 	std::vector<bool> genome_binder;
 	bool is_genome_polymerase;
+	bool is_genome_repair;
 	bool is_positive_factor;
 	i32 energy_balance;
 };
@@ -82,7 +83,7 @@ struct transcription_factor {
 	bool positive;
 	f32 curr_effect;
 };
-enum class special_action { division };
+enum class special_action { division, repair };
 struct special_chem_protein : public chem_protein {
 	special_action act;
 	i32 energy_balance;

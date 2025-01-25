@@ -23,16 +23,18 @@ void main() {
 	gl_Position = p.proj * real_pos;
 	fvpos = vpos;
 	fvcol = vec4(.1, .1, 1., 1.);
-	const float edges[] = float[3](-1, 1, 0.01);
-	const vec4 colors[] = vec4[3](
+	const float edges[] = float[4](-1, 1, 0.01, 0.01);
+	const vec4 colors[] = vec4[4](
 		vec4(0, 0, 0, .5),
 		vec4(.1, 0, 1, 1),
-		vec4(.5, .1, .8, 1)
+		vec4(.5, .1, .8, 1),
+		vec4(1., .8, .1, 1)
 	);
-	const vec4 conc_factor[] = vec4[3](
+	const vec4 conc_factor[] = vec4[4](
 		vec4(1, 0, 0, 0),
 		vec4(0, 1, 0, 0),
-		vec4(0, .5, 0, 0)
+		vec4(0, .5, 0, 0),
+		vec4(0, 0, 0, 0)
 	);
 	fvedge = edges[type];
 	fvcol = colors[type] + conc_factor[type] * conc;
