@@ -3,6 +3,8 @@
 #include <imgui.h>
 #include "log/log.hpp"
 
+ImU32 comp_cols[4] = {ImColor(1.f, .2f, .2f), ImColor(.1f, 1.f, .1f), ImColor(.1f, .1f, 1.f), ImColor(.6f, .6f, .6f)};
+
 compound::compound(u8 a) : atoms(a) {
 	atoms = std::min({atoms, rot(1), rot(2), rot(3)});
 }
@@ -16,13 +18,11 @@ u8 compound::rot(u8 amount) const {
 
 void compound_info::imgui(f32 sz, f32 w, f32 sp) const {
 	ImDrawList *draw_list = ImGui::GetWindowDrawList();
-	static const ImU32 cols[] = {ImColor(1.f, .2f, .2f), ImColor(.1f, 1.f, .1f),
-		ImColor(.1f, .1f, 1.f), ImColor(.6f, .6f, .6f)};
 	ImVec2 pos = ImGui::GetCursorScreenPos();
-	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x + sz/2, pos.y}, cols[parts[0]], w);
-	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x + sz, pos.y + sz/2}, cols[parts[1]], w);
-	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x + sz/2, pos.y + sz}, cols[parts[2]], w);
-	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x, pos.y + sz/2}, cols[parts[3]], w);
+	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x + sz/2, pos.y}, comp_cols[parts[0]], w);
+	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x + sz, pos.y + sz/2}, comp_cols[parts[1]], w);
+	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x + sz/2, pos.y + sz}, comp_cols[parts[2]], w);
+	draw_list->AddLine({pos.x + sz/2, pos.y + sz/2}, {pos.x, pos.y + sz/2}, comp_cols[parts[3]], w);
 	ImGui::Dummy({sz+sp, sz+sp});
 }
 
@@ -49,6 +49,9 @@ compounds::compounds() {
 	logs::debugln("compounds", "there are ", u32(id), " different compounds");
 }
 f32 &compounds::at(usize compound, usize particle) {
+	return concentrations[compound][particle];
+}
+f32 compounds::at(usize compound, usize particle) const {
 	return concentrations[compound][particle];
 }
 

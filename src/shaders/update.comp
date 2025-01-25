@@ -41,7 +41,7 @@ layout(std140, set=0, binding=5) writeonly buffer concentrations_t {
 	vec4 data[];
 } concentrations;
 
-const vec2 MAX_SPEED = vec2(0.2, 0.2);
+const vec2 MAX_SPEED = vec2(0.5, 0.5);
 
 float density_contribution(float dist) {
 	const float norm_const = 2 / 3.1415926535897; // from wolfram alpha with Integrate[(1-r)^3,{r,0,1},{a,0,2pi}] :)

@@ -73,6 +73,7 @@ public:
 	void draw() const;
 };
 
+struct empty_protein { };
 struct chem_protein {
 	std::vector<u8> inputs;
 	std::vector<u8> outputs;
@@ -91,7 +92,7 @@ struct special_chem_protein : public chem_protein {
 
 struct protein {
 	std::vector<catalyzer> catalyzers;
-	using effect_t = std::variant<chem_protein, transcription_factor, special_chem_protein>;
+	using effect_t = std::variant<empty_protein, chem_protein, transcription_factor, special_chem_protein>;
 	effect_t effect;
 	usize genome_start;
 	usize genome_end;

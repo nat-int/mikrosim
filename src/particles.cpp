@@ -176,7 +176,7 @@ void particles::step_cpu() {
 					cells[i].division_genome.clear();
 					continue;
 				}
-				cells[ci].health = (cells[i].health + cells[ci].health) / 2;
+				cells[ci].health = (cells[i].health * 7 + cells[ci].health) / 8;
 				cells[ci].genome.swap(cells[i].division_genome);
 				cells[ci].analyze(*comps);
 			}

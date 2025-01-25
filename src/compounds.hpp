@@ -1,8 +1,11 @@
 #pragma once
 #include <array>
 #include <bitset>
+#include <imgui.h>
 #include "cmake_defs.hpp"
 #include "defs.hpp"
+
+extern ImU32 comp_cols[4];
 
 struct compound {
 	u8 atoms;
@@ -30,5 +33,6 @@ public:
 
 	compounds();
 	f32 &at(usize compound, usize particle);
+	f32 at(usize compound, usize particle) const;
 };
 

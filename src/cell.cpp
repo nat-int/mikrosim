@@ -60,6 +60,8 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 				bind_points.push_back(i);
 		}
 		e = transcription_factor{bind_points, info.is_positive_factor, 0.f};
+	} else if (info.reaction_input.empty()) {
+		e = empty_protein{};
 	} else {
 		static constexpr f32 c = 0.018f; // just looked nice-ish in desmos :P
 		f32 K = glm::exp(f32(-info.energy_balance) * c); // based on K = exp(-dG / RT)
@@ -145,6 +147,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 		}
 	}
 	std::visit(overloaded{
+		[](empty_protein &) {},
 		[this, &prot, cata_effect](transcription_factor &tf) {
 			f32 effect = prot.conc * std::clamp(cata_effect, 0.f, 1.f) * (tf.positive ? -1.f : 1.f);
 			f32 delta = effect - tf.curr_effect;
