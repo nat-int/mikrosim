@@ -4,6 +4,8 @@ project(Mikrosim VERSION 0.1.0.0 LANGUAGES CXX)
 option(VULKAN_VALIDATION "vulkan validation layers" ON)
 option(VULKAN_VALIDATION_SUPRESS_LOADER_INFO "suppress vulkan validation loader info messages" ON)
 option(VULKAN_VALIDATION_ABORT "abort on vulkan validation error" OFF)
+option(COMPILE_SHADERS "compile shaders to spirv" ON)
+
 set(FRAMES_IN_FLIGHT 2)
 set(PARTICLE_COUNT 32768)
 set(CELL_PARTICLE_COUNT 2048)
@@ -35,7 +37,9 @@ find_package(glm REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS glslc)
 find_package(VulkanMemoryAllocator REQUIRED)
-find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
+if (COMPILE_SHADERS)
+	find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
+endif()
 if(POLICY CMP0167)
 	cmake_policy(SET CMP0167 NEW)
 endif()
@@ -58,13 +62,15 @@ function(add_shaders SHADER_TARGET)
 	add_custom_target(${SHADER_TARGET} ALL DEPENDS ${SPV_SHADERS})
 endfunction()
 
-configure_file(${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl.in ${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl)
-add_shaders(sh ${CMAKE_SOURCE_DIR}/src/shaders/count.comp ${CMAKE_SOURCE_DIR}/src/shaders/upsweep.comp
-	${CMAKE_SOURCE_DIR}/src/shaders/downsweep.comp ${CMAKE_SOURCE_DIR}/src/shaders/write.comp
-	${CMAKE_SOURCE_DIR}/src/shaders/density.comp ${CMAKE_SOURCE_DIR}/src/shaders/update.comp
-	${CMAKE_SOURCE_DIR}/src/shaders/report.comp
-	${CMAKE_SOURCE_DIR}/src/shaders/particle.vert ${CMAKE_SOURCE_DIR}/src/shaders/particle.frag)
-configure_file(${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp.in ${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp)
+if (COMPILE_SHADERS)
+	configure_file(${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl.in ${CMAKE_SOURCE_DIR}/src/shaders/settings.glsl)
+	add_shaders(sh ${CMAKE_SOURCE_DIR}/src/shaders/count.comp ${CMAKE_SOURCE_DIR}/src/shaders/upsweep.comp
+		${CMAKE_SOURCE_DIR}/src/shaders/downsweep.comp ${CMAKE_SOURCE_DIR}/src/shaders/write.comp
+		${CMAKE_SOURCE_DIR}/src/shaders/density.comp ${CMAKE_SOURCE_DIR}/src/shaders/update.comp
+		${CMAKE_SOURCE_DIR}/src/shaders/report.comp
+		${CMAKE_SOURCE_DIR}/src/shaders/particle.vert ${CMAKE_SOURCE_DIR}/src/shaders/particle.frag)
+	configure_file(${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp.in ${CMAKE_SOURCE_DIR}/src/cmake_defs.hpp)
+endif()
 add_executable(mikrosim
 	${CMAKE_SOURCE_DIR}/src/main.cpp
 		${CMAKE_SOURCE_DIR}/src/app.cpp ${CMAKE_SOURCE_DIR}/src/particles.cpp
