@@ -1,7 +1,6 @@
 #include "vma_wrap.hpp"
 
 #include <algorithm>
-#include "context.hpp"
 
 namespace vma {
 	allocation_create_info::allocation_create_info(allocation_create_flags flags, memory_usage usage, vk::MemoryPropertyFlags required_flags, vk::MemoryPropertyFlags preferred_flags,

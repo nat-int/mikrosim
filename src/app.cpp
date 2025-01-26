@@ -131,6 +131,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	set_conc_target = 1.f;
 }
 void mikrosim_window::terminate() {
+	concs_stage.unmap();
 	device.waitIdle();
 	ImGui_ImplVulkan_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
@@ -231,7 +232,7 @@ void mikrosim_window::update() {
 		if (inp.is_key_down(GLFW_KEY_SPACE)) {
 			running = !running;
 		}
-		if (inp.is_key_down(GLFW_KEY_N) && cv.c->genome.size() > 6) {
+		if (inp.is_key_down(GLFW_KEY_N) && cv.c->genome.size() > 6 && cv.c->s == cell::state::active) {
 			// TODO: bug - when spawning a cell without loading a genome first, the concentrations in it become nan
 			// adding that thing to position fixes cells spawning at -nan when in starting
 			// view for some reason, probably glm being weird with types??

@@ -196,6 +196,7 @@ cell_view::cell_view() : ext_cell(0, {}, {}), c(&ext_cell) {
 	ext_cell.genome = {};
 	file_path = "./basic.genome";
 	save_file_path = "./qs.genome";
+	follow = false;
 }
 void cell_view::draw(const compounds &comps, protein_view &pv) {
 	if (ext_cell.bound_factors.empty()) {
@@ -341,6 +342,7 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 					if (j.compound == i) bg.b += 1.f;
 				}
 			}
+			for (u8 j : block_compounds) { if (comps.atoms_to_id[j] == i) bg *= 1.5f; }
 			bg = glm::clamp(bg, 0.f, .5f);
 			fg = bg.x+bg.y+bg.z < 0.01f ? glm::vec3{.7f, .7f, .7f} : bg * 2.f;
 			draw_list->AddLine({pos.x + f32(i) * csp, pos.y},

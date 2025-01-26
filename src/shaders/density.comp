@@ -82,7 +82,7 @@ void main() {
 
 		particles.data[particle_id].density = density;
 		cells.data[sorted_pos].density = density;
-		cells.data[sorted_pos].concentration *= 1 / mix_density;
+		cells.data[sorted_pos].concentration *= mix_density < 0.0001 ? 0 : 1 / mix_density;
 	}
 }
 

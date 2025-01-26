@@ -16,7 +16,7 @@ namespace compile_options {
 	constexpr bool vulkan_validation_abort = 0;
 	constexpr u32 frames_in_flight = 2;
 	constexpr u32 particle_count = 32768;
-	constexpr u32 cell_particle_count = 512;
+	constexpr u32 cell_particle_count = 2048;
 	constexpr u32 env_particle_count = particle_count - cell_particle_count;
 	constexpr u32 cells_x = 100;
 	constexpr u32 cells_y = 100;

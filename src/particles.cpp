@@ -151,7 +151,12 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 
 	cpu_ts.times = {0};
 }
-particles::~particles() { cell_stage.unmap(); }
+particles::~particles() {
+	cell_stage.unmap();
+	reports.unmap();
+	concs_upload.unmap();
+	concs_download.unmap();
+}
 
 void particles::step_cpu() {
 	cpu_ts.start();
@@ -205,6 +210,9 @@ void particles::step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamp
 		for (u32 j = 0; j < compile_options::particle_count; j++) {
 			comps->at(compi, j) = concs_download_map[p.frame(sim_frames-compile_options::frames_in_flight)*
 				compile_options::particle_count + j][i32(i)];
+			/*if (comps->at(compi, j) > 20.f || comps->at(compi, j) < -0.0001f || std::isnan(comps->at(compi, j))) {
+				logs::warnln("particles", "conc out of normal range after diffusion: conc[", compi, "] at ", j, " == ", comps->at(compi, j));
+			}*/
 		}
 	}
 	for (u32 i = 0; i < 4; i++) {
@@ -212,6 +220,9 @@ void particles::step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamp
 		upush.mix_comps[i32(i)] = compi;
 		comps->locked[compi] = true;
 		for (u32 j = 0; j < compile_options::particle_count; j++) {
+			/*if (comps->at(compi, j) > 20.f || comps->at(compi, j) < -0.0001f || std::isnan(comps->at(compi, j))) {
+				logs::warnln("particles", "conc out of normal range before diffusion: conc[", compi, "] at ", j, " == ", comps->at(compi, j));
+			}*/
 			concs_upload_map[p.frame() * compile_options::particle_count + j][i32(i)] = comps->at(compi, j);
 		}
 	}

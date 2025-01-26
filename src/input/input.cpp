@@ -2,6 +2,8 @@
 #include "../rendering/window.hpp"
 
 namespace input {
+	input_handler::input_handler() : cursor_pos{0.f, 0.f}, last_cursor_pos{0.f, 0.f}, key_held_last{},
+		key_held{}, mouse_held_last{}, mouse_held{} { }
 	bool input_handler::is_key_down(i32 key) const { return key_held[usize(key)] && !key_held_last[usize(key)]; }
 	bool input_handler::is_key_held(i32 key) const { return key_held[usize(key)]; }
 	bool input_handler::is_key_up(i32 key) const { return !key_held[usize(key)] && key_held_last[usize(key)]; }

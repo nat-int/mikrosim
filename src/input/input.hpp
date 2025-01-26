@@ -15,6 +15,7 @@ namespace input {
 		std::array<bool, GLFW_MOUSE_BUTTON_LAST+1> mouse_held_last;
 		std::array<bool, GLFW_MOUSE_BUTTON_LAST+1> mouse_held;
 	public:
+		input_handler();
 		bool is_key_down(i32 key) const;
 		bool is_key_held(i32 key) const;
 		bool is_key_up(i32 key) const;

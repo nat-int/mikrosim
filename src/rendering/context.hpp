@@ -9,7 +9,7 @@
 namespace rend {
 	template<typename T> void set_object_name(const vk::detail::DispatchLoaderDynamic &dispatcher, vk::Device device, T object, const char *name) {
 		if constexpr (compile_options::vulkan_validation) {
-			device.setDebugUtilsObjectNameEXT({T::objectType,reinterpret_cast<uint64_t>(static_cast<T::CType>(object)), name}, dispatcher);
+			device.setDebugUtilsObjectNameEXT({T::objectType,reinterpret_cast<uint64_t>(static_cast<typename T::CType>(object)), name}, dispatcher);
 		}
 	}
 	class context;

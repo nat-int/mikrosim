@@ -112,6 +112,11 @@ protein_info folder::analyze(const compounds &comp) const {
 				genome_site.push_back((place[0] >> shift & 3) == 2 ? 0 : 1);
 			}
 		}
+		max_g_seq_len = std::max(g_seq_len, max_g_seq_len);
+		if (max_genome_site.size() < genome_site.size()) {
+			max_genome_site.swap(genome_site);
+			max_genome_site_pos = add + mul * bound;
+		}
 	};
 	check_edges(width, 0, height, 6);
 	check_edges(width, height-1, height, 2);

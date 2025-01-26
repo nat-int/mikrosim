@@ -37,7 +37,7 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 			break;
 		}
 	}
-	std::array<f32, block_count> cost;
+	std::array<f32, block_count> cost{};
 	std::vector<block> bls;
 	for (usize i = blocks_boundary; ; i += 4) {
 		if (i >= genome.size() - 3) return false;
@@ -131,10 +131,11 @@ void cell::create_tick(compounds &comps, protein &prot) {
 }
 void cell::update_tick(compounds &comps, protein &prot) {
 	f32 cata_effect = 1.f;
+	f32 req_cata_worst = 0.f;
 	for (const auto &c : prot.catalyzers) {
 		f32 conc = comps.at(c.compound, gpu_id);
-		if (conc > 0) {
-			cata_effect += conc * conc + 1 - c.effect;
+		if (c.effect > 0) {
+			cata_effect += conc * conc - 1 + c.effect;
 		} else {
 			f32 cata_fun = conc * conc - 1;
 			f32 inhib_fun = -conc;
@@ -143,9 +144,15 @@ void cell::update_tick(compounds &comps, protein &prot) {
 			f32 eff3 = eff2 * -c.effect;
 			f32 cata_coef = 2 * eff3 - 3 * eff2 + 1; // smoothstep interpolation
 			f32 inhib_coef = -2 * eff3 + 3 * eff2;
-			cata_effect += cata_fun * cata_coef + inhib_fun * inhib_coef;
+			cata_effect += inhib_fun * inhib_coef;
+			f32 cata = cata_fun * cata_coef;
+			if (cata > 0.f)
+				cata_effect += cata;
+			else
+				req_cata_worst = std::min(cata, req_cata_worst);
 		}
 	}
+	cata_effect += req_cata_worst;
 	std::visit(overloaded{
 		[](empty_protein &) {},
 		[this, &prot, cata_effect](transcription_factor &tf) {
@@ -195,7 +202,9 @@ void cell::update_tick(compounds &comps, protein &prot) {
 					if (conc_sum < bit_cost * 64.f)
 						break;
 					if (rand() % 4000 == 0) { // length mutation
-						if (rand() % 2 == 0) { // skip some bits
+						if (rand() % 20 == 0) { // jump to random location
+							division_pos = usize(rand()) % genome.size();
+						} if (rand() % 2 == 0) { // skip some bits
 							if (rand() % 2 == 0) {
 								division_pos += 4;
 							} else {
