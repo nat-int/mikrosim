@@ -1,6 +1,7 @@
 #include "parse.hpp"
-#include "log/log.hpp"
 #include <fstream>
+#include "cell.hpp"
+#include "log/log.hpp"
 
 std::vector<bool> load_genome(const std::string &file) {
 	std::ifstream f(file);
@@ -35,6 +36,21 @@ std::vector<bool> load_genome(const std::string &file) {
 		}
 	}
 	return out;
+}
+void save_genome(const std::string &file, cell &c) {
+	std::ofstream f(file);
+	if (!f.good()) {
+		logs::errorln("mikrosim", "failed to open genome file (for writing) ", file);
+		return;
+	}
+	for (usize i = 0; i < c.genome.size(); i++) {
+		for (const auto &p : c.proteins) {
+			if (p.genome_end == i) { f << '\n'; break; }
+			if (p.genome_start == i) { f << ' '; break; }
+		}
+		f << (c.genome[i] ? 'T' : 'F');
+	}
+	f << '\n';
 }
 
 std::pair<std::array<force_block, 4>, std::array<chem_block, 4>> load_blocks(const std::string &file) {

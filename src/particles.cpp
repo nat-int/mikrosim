@@ -191,7 +191,7 @@ void particles::step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamp
 	for (usize i = 0; i < 4; i++) {
 		blocks_uniform.get_map()->fbs[i].pos = force_blocks[i].pos;
 		blocks_uniform.get_map()->fbs[i].extent = force_blocks[i].extent;
-		blocks_uniform.get_map()->fbs[i].cartesian_force = force_blocks[i].cartesian_force * .000003f;
+		blocks_uniform.get_map()->fbs[i].cartesian_force = force_blocks[i].cartesian_force * .00003f;
 		blocks_uniform.get_map()->fbs[i].polar_force = force_blocks[i].polar_force * .000003f;
 		blocks_uniform.get_map()->chbs[i] = chem_blocks[i];
 	}

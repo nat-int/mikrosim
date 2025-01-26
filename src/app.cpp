@@ -128,6 +128,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	ImGui_ImplVulkan_Init(&imgui_vk);
 
 	pv.set_rand(*p->comps, 42);
+	set_conc_target = 1.f;
 }
 void mikrosim_window::terminate() {
 	device.waitIdle();
@@ -230,7 +231,7 @@ void mikrosim_window::update() {
 		if (inp.is_key_down(GLFW_KEY_SPACE)) {
 			running = !running;
 		}
-		if (inp.is_key_down(GLFW_KEY_N) && !cv.c->genome.empty()) {
+		if (inp.is_key_down(GLFW_KEY_N) && cv.c->genome.size() > 6) {
 			// TODO: bug - when spawning a cell without loading a genome first, the concentrations in it become nan
 			// adding that thing to position fixes cells spawning at -nan when in starting
 			// view for some reason, probably glm being weird with types??
@@ -241,15 +242,30 @@ void mikrosim_window::update() {
 		if (inp.is_key_down(GLFW_KEY_B)) {
 			for (usize i = 0; i < block_count; i++) {
 				for (usize j = 0; j < compile_options::particle_count; j++) {
-					p->comps->at(p->comps->atoms_to_id[block_compounds[i]], j) = 1.f;
+					p->comps->at(p->comps->atoms_to_id[block_compounds[i]], j) = set_conc_target;
 				}
 			}
 		}
 		if (inp.is_key_down(GLFW_KEY_G)) {
 			for (usize i = 0; i < compile_options::particle_count; i++) {
-				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = 1.f;
-				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = 1.f;
+				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = set_conc_target;
+				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = set_conc_target;
 			}
+		}
+		if (inp.is_key_down(GLFW_KEY_F11)) {
+			set_conc_target = .3f;
+			for (usize i = 0; i < compile_options::particle_count; i++) {
+				for (usize j = 0; j < block_count; j++) {
+					p->comps->at(p->comps->atoms_to_id[block_compounds[j]], i) = set_conc_target;
+				}
+				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = set_conc_target;
+				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = set_conc_target;
+			}
+			p->chem_blocks[0].comp = 9;
+			p->chem_blocks[0].lerp_strength = .1f;
+			cv.ext_cell.genome = load_genome("./basic.genome");
+			cv.c = &cv.ext_cell;
+			running = true;
 		}
 		if (inp.is_key_down(GLFW_KEY_F12) && !buffer_h->should_stage()) {
 			running = false;
@@ -288,8 +304,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	render_ts.reset(cmd);
 	render_ts.stamp(cmd, vk::PipelineStageFlagBits::eTopOfPipe, 0);
 	begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
-	win.set_viewport(cmd);
-	cmd.setScissor(0, vk::Rect2D{{u32(imgui_width), 0}, inner_ext});
+	win.set_viewport_and_scissor(cmd);
 	rend2d->bind_solid_pipeline(cmd);
 	rend2d->push_projection(cmd, vp);
 	bg_mesh.bind_draw(cmd);
@@ -315,20 +330,18 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		cmd.draw(6, 1, 0, 0);
 	}
 
-	win.set_viewport_and_scissor(cmd);
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	ImGui::SetNextWindowPos({0.0f, 0.0f});
-	ImGui::SetNextWindowSize({imgui_width, f32(win.height())});
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	if (ImGui::Begin("mikrosim", nullptr, ImGuiWindowFlags_NoMove)) {
+	if (ImGui::Begin("mikrosim")) {
 		ImGui::Text("%u FPS", fps); ImGui::SameLine();
 		if (running) {
-			ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running ([space] - stop)");
+			ImGui::TextColored({.5f, 1.f, .5f, 1.f}, "running");
 		} else {
-			ImGui::TextColored({1.f, .5f, .06f, 1.f}, "stopped ([space] - start)");
+			ImGui::TextColored({1.f, .5f, .06f, 1.f}, "stopped");
 		}
+		ImGui::SameLine();
+		if (ImGui::Button("start/stop")) { running = !running; }
 		ImGui::SliderFloat("fluid density", &p->global_density, .1f, 20.f, "%.3f");
 		ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
 		ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 8.f, "%.3f");
@@ -374,19 +387,19 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 			ImGui::TableNextColumn(); ImGui::Text("%" PRIu64, rd > 0 ? sns / rd : 0);
 			ImGui::EndTable();
 		}
-	}
-	// c++ even requires 2's complement now so it should be fine to type alias (u32-i32)
-	ImGui::SliderInt("shown compund", reinterpret_cast<i32 *>(&disp_compound), 0, compounds::count-1);
-	if (ImGui::BeginTable("##compound_info", 2)) {
-		const auto &info = p->comps->infos[disp_compound];
-		ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("image");
-		ImGui::TableNextColumn(); info.imgui();
-		ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("energy");
-		ImGui::TableNextColumn(); ImGui::Text("%" PRIu16, info.energy);
-		ImGui::EndTable();
+		// c++ even requires 2's complement now so it should be fine to type alias (u32-i32)
+		ImGui::SliderInt("shown compund", reinterpret_cast<i32 *>(&disp_compound), 0, compounds::count-1);
+		if (ImGui::BeginTable("##compound_info", 2)) {
+			const auto &info = p->comps->infos[disp_compound];
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("image");
+			ImGui::TableNextColumn(); info.imgui();
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("energy");
+			ImGui::TableNextColumn(); ImGui::Text("%" PRIu16, info.energy);
+			ImGui::EndTable();
+		}
+		ImGui::SliderFloat("set concentrations command target", &set_conc_target, 0.f, 2.f);
 	}
 	ImGui::End();
-	ImGui::PopStyleVar();
 	p->imgui();
 	pv.draw(*p->comps);
 	cv.draw(*p->comps, pv);
@@ -451,8 +464,8 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 			"drag with scroll wheel pressed - pan view\n[W][S][A][D] - move view\n"
 			"scroll - zoom\n[shift]+scroll - zoom (slower)\n"
 			"[N] - spawn new cell with genome copied from cell view\n"
-			"[B] - set all block concentrations to 1 everywhere\n"
-			"[G] - set all genome compound concentrations to 1 everywhere");
+			"[B] - set all block concentrations everywhere\n"
+			"[G] - set all genome compound concentrations everywhere");
 	}
 	ImGui::End();
 	ImGui::Render();

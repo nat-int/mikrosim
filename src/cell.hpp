@@ -30,6 +30,7 @@ public:
 	bool add_protein_rec(const compounds &comps, usize s, bool direct_transcription, u8 max_depth=4);
 	void analyze(const compounds &comps);
 	u8 genome_quad(usize i) const;
+	void test();
 private:
 	void create_tick(compounds &comps, protein &prot);
 	void update_tick(compounds &comps, protein &prot);

@@ -195,19 +195,25 @@ void protein_view::generator_gen(const compounds &comps) {
 cell_view::cell_view() : ext_cell(0, {}, {}), c(&ext_cell) {
 	ext_cell.genome = {};
 	file_path = "./basic.genome";
+	save_file_path = "./qs.genome";
 }
 void cell_view::draw(const compounds &comps, protein_view &pv) {
 	if (ext_cell.bound_factors.empty()) {
 		ext_cell.analyze(comps);
 	}
 	if (ImGui::Begin("cell view")) {
-		ImGui::InputText("file", &file_path);
+		ImGui::InputText("load file", &file_path);
 		ImGui::SameLine();
 		if (ImGui::Button("load")) {
 			ext_cell.genome = load_genome(file_path);
 			ext_cell.proteins.clear();
 			ext_cell.bound_factors.clear();
 			c = &ext_cell;
+		}
+		ImGui::InputText("save file", &save_file_path);
+		ImGui::SameLine();
+		if (ImGui::Button("save")) {
+			save_genome(save_file_path, *c);
 		}
 		ImGui::Separator();
 		if (ImGui::BeginTable("##base_info", 2)) {
@@ -353,7 +359,11 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 					{pos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[3]], 2.f);
 			}
 		}
-		ImGui::Dummy({csp * compounds::count, cbh + 12.f});
+		ImGui::Dummy({csp * compounds::count, cbh + 28.f});
+	}
+	ImGui::Separator();
+	if (ImGui::Button("test")) {
+		ext_cell.test();
 	}
 	ImGui::End();
 }

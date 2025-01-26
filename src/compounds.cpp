@@ -46,7 +46,12 @@ compounds::compounds() {
 		}
 	}
 	if (id != count)
-	logs::debugln("compounds", "there are ", u32(id), " different compounds");
+		logs::debugln("compounds", "there are ", u32(id), " different compounds");
+	for (usize i = 0; i < count; i++) {
+		for (usize j = 0; j < compile_options::particle_count; j++) {
+			at(i, j) = 0;
+		}
+	}
 }
 f32 &compounds::at(usize compound, usize particle) {
 	return concentrations[compound][particle];

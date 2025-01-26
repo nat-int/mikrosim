@@ -249,11 +249,11 @@ template<typename Range>
 f32 select_root(const Range &root_list) {
 	f32 out = std::numeric_limits<f32>::max();
 	for (f32 r : root_list) {
-		if (!std::isnan(r) && r > 0.f && r < out) {
+		if (!std::isnan(r) && abs(r) < abs(out)) {
 			out = r;
 		}
 	}
-	return out > 10.f ? 0.f : out;
+	return abs(out) > 10.f ? 0.f : out;
 }
 template<>
 f32 select_root<std::pair<f32, f32>>(const std::pair<f32, f32> &root_list) {
@@ -276,46 +276,113 @@ f32 cell::reaction_delta(compounds &comps, const protein &prot, f32 cata_effect,
 	f32 max_inp_take = 1.f;
 	for (u8 c : inp) {
 		f32 conc = comps.at(c, gpu_id);
-		if (conc < 0.001f) return 0.f;
 		usize count = 0;
 		for (u8 c2 : inp) { if (c == c2) count++; }
-		max_inp_take = std::min((conc) / f32(count), max_inp_take);
-		inp_prod *= conc;
+		max_inp_take = std::min(conc / f32(count), max_inp_take);
+		inp_prod *= conc > 0.f ? conc : 0.f;
 		for (usize i = fi.size() - 1; i > 0; i--) {
 			fi[i] = fi[i] * conc - fi[i-1];
 		}
 		fi[0] *= conc;
 	}
+	f32 max_out_take = 1.f;
 	for (u8 c : out) {
 		f32 conc = comps.at(c, gpu_id);
-		out_prod *= conc;
+		usize count = 0;
+		for (u8 c2 : out) { if (c == c2) count++; }
+		max_out_take = std::min(conc / f32(count), max_out_take);
+		out_prod *= conc > 0.f ? conc : 0.f;
 		for (usize i = fo.size() - 1; i > 0; i--) {
 			fo[i] = fo[i] * conc + fo[i-1];
 		}
 		fo[0] *= conc;
 	}
-	f32 curr_conc_ratio = out_prod / inp_prod;
-	f32 next_conc_ratio = std::lerp(curr_conc_ratio, K,
-		std::clamp(0.f, .1f * cata_effect * prot.conc, 1.f));
+	if (std::max(inp_prod, out_prod) < 0.0001f) {
+		return 0.f;
+	}
+	const f32 curr_conc_ratio = out_prod / std::max(inp_prod, 0.0001f);
+	const f32 t = std::clamp(.1f * cata_effect * prot.conc, 0.f, 1.f);
+	const f32 next_conc_ratio = std::lerp(curr_conc_ratio, K, t);
 	for (usize i = 0; i < fo.size(); i++) {
 		fo[i] -= fi[i] * next_conc_ratio;
 	}
 	switch (fo.size()) {
 	case 2: // linear
-		return std::clamp(-fo[0] / min_norm(fo[1], 0.001f), 0.f, max_inp_take);
+		return std::clamp(-fo[0] / min_norm(fo[1], 0.001f), -max_out_take, max_inp_take);
 	case 3:
 		return std::clamp(select_root(boost::math::tools::quadratic_roots(fo[2], fo[1], fo[0])),
-			0.f, max_inp_take);
+			-max_out_take, max_inp_take);
 	case 4:
 		return std::clamp(select_root(boost::math::tools::cubic_roots(fo[3], fo[2], fo[1], fo[0])),
-			0.f, max_inp_take);
+			-max_out_take, max_inp_take);
 	case 5:
 		return std::clamp(select_root(boost::math::tools::quartic_roots(fo[4], fo[3], fo[2], fo[1], fo[0])),
-			0.f, max_inp_take);
+			-max_out_take, max_inp_take);
 	default:
 		logs::errorln("cell", "reaction_delta was called with invalid reaction size! (cell id = ",
 			gpu_id, ")");
 		return 0.f;
 	}
+}
+
+void cell::test() {
+	logs::infoln("cell test", "running cell test");
+	std::unique_ptr<compounds> c = std::make_unique<compounds>();
+#define ZZZZ 0.f, 0.f, 0.f, 0.f,
+#define Z14 ZZZZ ZZZZ ZZZZ 0.f, 0.f
+	for (usize n = 1; n < 5; n++) {
+		proteins.clear();
+		std::vector<u8> in;
+		std::vector<u8> out;
+		for (usize i = 0; i < n; i++) {
+			in.push_back(u8(i));
+			out.push_back(u8(i + n));
+		}
+		proteins.push_back(protein{{}, chem_protein{in, out, 1.f}, 0, 0, {Z14}, 1.f, false});
+		for (usize i = 0; i < 100; i++) {
+			auto &p = proteins[0];
+			p.catalyzers.clear();
+			usize catas = usize(rand() % 32);
+			for (usize i = 0; i < catas; i++) {
+				p.catalyzers.push_back({randf()*2.f-1.f, u8(usize(rand())%compounds::count)});
+			}
+			f32 K = powf(2.f, 4*randf()-2.f);
+			std::get<chem_protein>(proteins[0].effect).K = K;
+			for (usize i = 0; i < compounds::count; i++) {
+				c->at(i, gpu_id) = randf() * 2.f;
+			}
+			const auto k = [this, &c, n]() {
+				f32 in = 0.f;
+				f32 out = 0.f;
+				for (usize i = 0; i < n; i++) {
+					in *= c->at(i, gpu_id);
+					out *= c->at(i+n, gpu_id);
+				}
+				return out / std::max(in, 0.00001f);
+			};
+			f32 sk = k();
+			f32 pk = sk;
+			for (usize i = 0; i < 100; i++) {
+				update_tick(*c, proteins[0]);
+				f32 ck = k();
+				static constexpr const char *types[] = {"linear", "quadratic", "cubic", "quartic"};
+				if (abs(ck - K) > abs(pk - K) + 0.0001f) {
+					logs::errorln("cell test", "[chem protein].[", types[n-1], "]: k doesn't approach K");
+					logs::errorln("cell test", "\tk = ", ck, ", prev k = ", pk, ", K = ", K);
+				}
+				for (usize j = 0; j < compounds::count; j++) {
+					if (c->at(j, gpu_id) < -0.0001f) {
+						logs::errorln("cell test", "[chem protein].[", types[n-1], "]: concetration below 0");
+						logs::errorln("cell test", "\tconcentrations[", j, "] = ", c->at(j, gpu_id));
+					} else if (c->at(j, gpu_id) > 7.f) {
+						logs::warnln("cell test", "[chem protein].[", types[n-1], "]: concetration suspiciously high");
+						logs::warnln("cell test", "\tconcentrations[", j, "] = ", c->at(j, gpu_id));
+					}
+				}
+				pk = ck;
+			}
+		}
+	}
+	logs::infoln("cell test", "done");
 }
 

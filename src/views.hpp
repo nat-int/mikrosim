@@ -28,6 +28,7 @@ struct cell_view {
 	cell ext_cell;
 	cell *c;
 	std::string file_path;
+	std::string save_file_path;
 	bool follow;
 
 	cell_view();
