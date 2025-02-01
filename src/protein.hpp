@@ -58,6 +58,7 @@ struct protein_info {
 	bool is_genome_repair;
 	bool is_positive_factor;
 	i32 energy_balance;
+	f32 stability;
 };
 
 class folder {
@@ -98,6 +99,7 @@ struct protein {
 	usize genome_end;
 	std::array<f32, block_count> cost;
 	f32 conc;
+	f32 stability;
 	bool direct_transcription;
 };
 

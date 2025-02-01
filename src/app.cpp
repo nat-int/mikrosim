@@ -257,14 +257,19 @@ void mikrosim_window::update() {
 			set_conc_target = .3f;
 			for (usize i = 0; i < compile_options::particle_count; i++) {
 				for (usize j = 0; j < block_count; j++) {
-					p->comps->at(p->comps->atoms_to_id[block_compounds[j]], i) = set_conc_target;
+					p->comps->at(p->comps->atoms_to_id[block_compounds[j]], i) = .2f;
 				}
-				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = set_conc_target;
-				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = set_conc_target;
+				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = .07f;
+				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = .07f;
+				p->comps->at(3, i) = 1.2f;
+				p->comps->at(45, i) = 0.3f;
+				p->comps->at(58, i) = 1.0f;
 			}
-			p->chem_blocks[0].comp = 9;
-			p->chem_blocks[0].lerp_strength = .1f;
-			cv.ext_cell.genome = load_genome("./basic.genome");
+			for (usize i = 0; i < 4; i++) {
+				p->force_blocks[i] = {};
+				p->chem_blocks[i] = {};
+			}
+			cv.ext_cell.genome = load_genome("./g0");
 			cv.c = &cv.ext_cell;
 			running = true;
 		}
@@ -343,6 +348,17 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("start/stop")) { running = !running; }
+		// c++ even requires 2's complement now so it should be fine to type alias (u32-i32)
+		ImGui::SliderInt("shown compund", reinterpret_cast<i32 *>(&disp_compound), 0, compounds::count-1);
+		if (ImGui::BeginTable("##compound_info", 2)) {
+			const auto &info = p->comps->infos[disp_compound];
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("image");
+			ImGui::TableNextColumn(); info.imgui();
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("energy");
+			ImGui::TableNextColumn(); ImGui::Text("%" PRIu16, info.energy);
+			ImGui::EndTable();
+		}
+		ImGui::SliderFloat("set concentrations command target", &set_conc_target, 0.f, 2.f);
 		ImGui::SliderFloat("fluid density", &p->global_density, .1f, 20.f, "%.3f");
 		ImGui::SliderFloat("fluid stiffness", &p->stiffness, 0.f, 16.f, "%.3f");
 		ImGui::SliderFloat("fluid viscosity", &p->viscosity, 0.f, 8.f, "%.3f");
@@ -388,17 +404,6 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 			ImGui::TableNextColumn(); ImGui::Text("%" PRIu64, rd > 0 ? sns / rd : 0);
 			ImGui::EndTable();
 		}
-		// c++ even requires 2's complement now so it should be fine to type alias (u32-i32)
-		ImGui::SliderInt("shown compund", reinterpret_cast<i32 *>(&disp_compound), 0, compounds::count-1);
-		if (ImGui::BeginTable("##compound_info", 2)) {
-			const auto &info = p->comps->infos[disp_compound];
-			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("image");
-			ImGui::TableNextColumn(); info.imgui();
-			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("energy");
-			ImGui::TableNextColumn(); ImGui::Text("%" PRIu16, info.energy);
-			ImGui::EndTable();
-		}
-		ImGui::SliderFloat("set concentrations command target", &set_conc_target, 0.f, 2.f);
 	}
 	ImGui::End();
 	p->imgui();

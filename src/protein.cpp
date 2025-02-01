@@ -66,12 +66,22 @@ struct binding_site {
 };
 protein_info folder::analyze(const compounds &comp) const {
 	protein_info out{};
+	f32 stability_factor = 0.f;
 	// find interesting places in the placed protein
 	std::vector<binding_site> active_sites;
 	std::vector<binding_site> catalysis_sites;
 	for (usize i = 0; i < placed.size(); i++) {
-		if (!placed[i].empty())
+		if (!placed[i].empty()) {
+			if (placed[i].size() > 1) {
+				stability_factor += 0.05f;
+				if (i / height == 0 || i / height == width-1 || i % height == 0 || i % height == height-1 ||
+					placed[i-height].empty() || placed[i+height].empty() || placed[i-1].empty() ||
+					placed[i+1].empty()) {
+					stability_factor += 1.f;
+				}
+			}
 			continue;
+		}
 		u8 l = 255, r = 255, u = 255, d = 255;
 		if (i / height > 0 && placed[i-height].size() == 1) { l = placed[i-height][0] >> 4 & 3; }
 		if (i / height < width-1 && placed[i+height].size() == 1) { r = placed[i+height][0] & 3; }
@@ -86,6 +96,8 @@ protein_info folder::analyze(const compounds &comp) const {
 			catalysis_sites.push_back(binding_site{l, r, u, d, i});
 		}
 	}
+	out.stability = 1.f - expf(-stability_factor*.25f) * .15f; // just feels nice
+	out.stability = std::min(out.stability, 0.99f);
 	// check edges for genome binding sites (which make the protein a transcription factor)
 	usize max_genome_site_pos;
 	std::vector<bool> max_genome_site;

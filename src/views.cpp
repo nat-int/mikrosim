@@ -99,6 +99,8 @@ void protein_view::draw(const compounds &comps) {
 		 	ImGui::Text("%s", (info.is_positive_factor ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("reaction energy change");
 			ImGui::TableNextColumn(); ImGui::Text("%" PRIi32, info.energy_balance);
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("stability");
+			ImGui::TableNextColumn(); ImGui::Text("%.3lf", f64(info.stability));
 			ImGui::EndTable();
 		}
 		ImGui::Checkbox("genome readonly", &genome_readonly);
@@ -233,6 +235,17 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			ImGui::EndTable();
 		}
 		ImGui::Checkbox("follow", &follow);
+
+		constexpr static f32 spy = 7.f;
+		constexpr static usize llen = 100;
+		const ImVec2 gpos = ImGui::GetCursorScreenPos();
+		ImGui::Dummy({f32(llen), f32(u32((c->genome.size()+llen-1) / llen)) * spy});
+		ImGui::Separator();
+		const ImVec2 cpos = ImGui::GetCursorScreenPos();
+		constexpr static f32 csp = 4.f; // spacing of bars
+		constexpr static f32 cbh = 25.f; // bar height
+		ImGui::Dummy({csp * compounds::count, cbh + 28.f});
+
 		usize hovered_prot = usize(-1);
 		if (ImGui::BeginTable("##proteins", 4)) {
 			ImGui::TableNextRow(); ImGui::TableNextColumn();
@@ -281,10 +294,8 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			hovered_prot = usize(ImGui::TableGetHoveredRow()-1);
 			ImGui::EndTable();
 		}
+
 		ImDrawList *draw_list = ImGui::GetWindowDrawList();
-		ImVec2 pos = ImGui::GetCursorScreenPos();
-		constexpr static f32 spy = 7.f;
-		constexpr static usize llen = 100;
 		const bool hover_tf = hovered_prot < c->proteins.size() &&
 			std::holds_alternative<transcription_factor>(c->proteins[hovered_prot].effect);
 		const std::optional<const transcription_factor *> hover_tf_extract = hover_tf ?
@@ -294,35 +305,31 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			for (usize j = 0; j < llen; j++) {
 				const usize k = llen * i + j;
 				if (k < c->genome.size()) {
-					draw_list->AddLine({pos.x + f32(j) * 3.f, pos.y + f32(i) * spy},
-						{pos.x + f32(j + 1) * 3.f, pos.y + f32(i) * spy},
+					draw_list->AddLine({gpos.x + f32(j) * 3.f, gpos.y + f32(i) * spy},
+						{gpos.x + f32(j + 1) * 3.f, gpos.y + f32(i) * spy},
 						c->genome[k] ? ImColor(.1f, .1f, 1.f) : ImColor(1.f, .1f, .1f), 3.f);
 					if (hovered_prot < c->proteins.size() && c->proteins[hovered_prot].genome_start <= k &&
 							k < c->proteins[hovered_prot].genome_end) {
-						draw_list->AddLine({pos.x + f32(j) * 3.f, pos.y + f32(i) * spy + 3.f},
-							{pos.x + f32(j + 1) * 3.f, pos.y + f32(i) * spy + 3.f},
+						draw_list->AddLine({gpos.x + f32(j) * 3.f, gpos.y + f32(i) * spy + 3.f},
+							{gpos.x + f32(j + 1) * 3.f, gpos.y + f32(i) * spy + 3.f},
 							ImColor(1.f, 1.f, .1f), 3.f);
 					}
 					if (!c->bound_factors.empty() && glm::abs(c->bound_factors[k]) > 0.01f) {
 						const f32 f = c->bound_factors[k];
-						draw_list->AddLine({pos.x + f32(j) * 3.f, pos.y + f32(i) * spy + 3.f},
-							{pos.x + f32(j + 1) * 3.f, pos.y + f32(i) * spy + 3.f},
+						draw_list->AddLine({gpos.x + f32(j) * 3.f, gpos.y + f32(i) * spy + 3.f},
+							{gpos.x + f32(j + 1) * 3.f, gpos.y + f32(i) * spy + 3.f},
 							f > 0.f ? ImColor(.7f, .7f, .7f, f) : ImColor(.1f, 1.f, .1f, -f), 3.f);
 					}
 					if (hover_tf && std::ranges::find((*hover_tf_extract)->bind_points, k) !=
 						(*hover_tf_extract)->bind_points.end()) {
-						draw_list->AddLine({pos.x + f32(j) * 3.f, pos.y + f32(i) * spy + 3.f},
-							{pos.x + f32(j + 1) * 3.f, pos.y + f32(i) * spy + 3.f},
+						draw_list->AddLine({gpos.x + f32(j) * 3.f, gpos.y + f32(i) * spy + 3.f},
+							{gpos.x + f32(j + 1) * 3.f, gpos.y + f32(i) * spy + 3.f},
 							ImColor(1.f, .1f, 1.f), 3.f);
 					}
 				}
 			}
 		}
-		ImGui::Dummy({f32(llen), f32(u32((c->genome.size()+llen-1) / llen)) * spy});
-		ImGui::Separator();
-		constexpr static f32 csp = 4.f; // spacing of bars
-		constexpr static f32 cbh = 25.f; // bar height
-		pos = ImGui::GetCursorScreenPos();
+
 		const bool hover_cp = hovered_prot < c->proteins.size() &&
 			std::holds_alternative<chem_protein>(c->proteins[hovered_prot].effect);
 		const bool hover_scp = hovered_prot < c->proteins.size() &&
@@ -345,23 +352,22 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			for (u8 j : block_compounds) { if (comps.atoms_to_id[j] == i) bg *= 1.5f; }
 			bg = glm::clamp(bg, 0.f, .5f);
 			fg = bg.x+bg.y+bg.z < 0.01f ? glm::vec3{.7f, .7f, .7f} : bg * 2.f;
-			draw_list->AddLine({pos.x + f32(i) * csp, pos.y},
-				{pos.x + f32(i) * csp, pos.y + cbh + 1.f}, ImColor(bg.r, bg.g, bg.b), 3.f);
-			draw_list->AddLine({pos.x + f32(i) * csp, pos.y + cbh * (1.f - .5f * comps.at(i, c->gpu_id))},
-				{pos.x + f32(i) * csp, pos.y + cbh + 1.f}, ImColor(fg.r, fg.g, fg.b), 3.f);
-			const f32 center_y = pos.y + cbh + f32(i % 3) * 10.f + 5.f;
+			draw_list->AddLine({cpos.x + f32(i) * csp, cpos.y},
+				{cpos.x + f32(i) * csp, cpos.y + cbh + 1.f}, ImColor(bg.r, bg.g, bg.b), 3.f);
+			draw_list->AddLine({cpos.x + f32(i) * csp, cpos.y + cbh * (1.f - .5f * comps.at(i, c->gpu_id))},
+				{cpos.x + f32(i) * csp, cpos.y + cbh + 1.f}, ImColor(fg.r, fg.g, fg.b), 3.f);
+			const f32 center_y = cpos.y + cbh + f32(i % 3) * 10.f + 5.f;
 			for (usize j = 0; j < 4; j++) {
-				draw_list->AddLine({pos.x + f32(i) * csp, center_y - 4.f},
-					{pos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[0]], 2.f);
-				draw_list->AddLine({pos.x + f32(i) * csp + 4.f, center_y},
-					{pos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[1]], 2.f);
-				draw_list->AddLine({pos.x + f32(i) * csp, center_y + 4.f},
-					{pos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[2]], 2.f);
-				draw_list->AddLine({pos.x + f32(i) * csp - 4.f, center_y},
-					{pos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[3]], 2.f);
+				draw_list->AddLine({cpos.x + f32(i) * csp, center_y - 4.f},
+					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[0]], 2.f);
+				draw_list->AddLine({cpos.x + f32(i) * csp + 4.f, center_y},
+					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[1]], 2.f);
+				draw_list->AddLine({cpos.x + f32(i) * csp, center_y + 4.f},
+					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[2]], 2.f);
+				draw_list->AddLine({cpos.x + f32(i) * csp - 4.f, center_y},
+					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[3]], 2.f);
 			}
 		}
-		ImGui::Dummy({csp * compounds::count, cbh + 28.f});
 	}
 	ImGui::Separator();
 	if (ImGui::Button("test")) {

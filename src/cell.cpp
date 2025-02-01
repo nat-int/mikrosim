@@ -75,7 +75,8 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 			e = chem_protein{info.reaction_input, info.reaction_output, K};
 		}
 	}
-	proteins.push_back({info.catalyzers, e, s, blocks_boundary, cost, 0.f, direct_transcription});
+	proteins.push_back({info.catalyzers, e, s, blocks_boundary, cost, 0.f, info.stability,
+		direct_transcription});
 	return true;
 }
 bool cell::add_protein_rec(const compounds &comps, usize s, bool direct_transcription, u8 max_depth) {
@@ -111,8 +112,8 @@ u8 cell::genome_quad(usize i) const {
 }
 void cell::create_tick(compounds &comps, protein &prot) {
 	// TODO: creating proteins shouldn't be free (in energy)
-	f32 denat = .05f * prot.conc; // TODO: some stability constant determined by folder
-	f32 create_pos = prot.direct_transcription ? 1.f : -bound_factors[prot.genome_start];
+	f32 denat = (1.f - powf(prot.stability, f32(proteins.size()))) * prot.conc;
+	f32 create_pos = (prot.direct_transcription ? 1.f : -bound_factors[prot.genome_start]);
 	for (usize i = prot.genome_start + 1; i < prot.genome_end; i++) {
 		create_pos -= std::max(bound_factors[i], 0.f); // only negative factors afterwards
 	}
@@ -122,7 +123,8 @@ void cell::create_tick(compounds &comps, protein &prot) {
 			max_create = std::min(max_create, comps.at(comps.atoms_to_id[block_compounds[i]], gpu_id) / prot.cost[i]);
 		}
 	}
-	f32 create = std::clamp(create_pos, 0.f, std::max(max_create, 0.f));
+	f32 create = std::clamp(1.f - powf(1.f - create_pos, f32(proteins.size())),
+		0.f, std::max(max_create, 0.f));
 	f32 delta = create - denat;
 	prot.conc += delta;
 	for (usize i = 0; i < block_count; i++) { // "denaturated" "proteins" "decompose" instantly :)
@@ -152,7 +154,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				req_cata_worst = std::min(cata, req_cata_worst);
 		}
 	}
-	cata_effect += req_cata_worst;
+	cata_effect = std::max(req_cata_worst+cata_effect, 0.f);
 	std::visit(overloaded{
 		[](empty_protein &) {},
 		[this, &prot, cata_effect](transcription_factor &tf) {
@@ -166,7 +168,8 @@ void cell::update_tick(compounds &comps, protein &prot) {
 		[this, &comps, &prot, cata_effect](chem_protein &cp) {
 			for (u8 c : cp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : cp.outputs) { if (comps.locked[c]) return; }
-			f32 delta = reaction_delta(comps, prot, cata_effect, cp.K, cp.inputs, cp.outputs);
+			f32 delta = reaction_delta(comps, prot, cata_effect * f32(proteins.size()), cp.K,
+				cp.inputs, cp.outputs);
 			for (u8 c : cp.inputs) {
 				comps.at(c, gpu_id) -= delta;
 			}
@@ -177,7 +180,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 		[this, &comps, &prot, cata_effect](special_chem_protein &scp) {
 			for (u8 c : scp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : scp.outputs) { if (comps.locked[c]) return; }
-			f32 delta = reaction_delta(comps, prot, cata_effect, scp.K, scp.inputs, scp.outputs);
+			f32 delta = reaction_delta(comps, prot, cata_effect * f32(proteins.size()), scp.K, scp.inputs, scp.outputs);
 			if (delta < 0.001f) return;
 			f32 energy = delta * f32(-scp.energy_balance);
 			if (energy < 0.001f) return;
@@ -187,7 +190,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				if (comps.locked[comps.atoms_to_id[g0_comp]]) { return; }
 				if (comps.locked[comps.atoms_to_id[g1_comp]]) { return; }
 				static constexpr f32 bit_cost = 1.f / 4096.f;
-				static constexpr f32 incorrect_unbind_chance = 0.995f;
+				static constexpr f32 incorrect_unbind_chance = 0.9995f;
 				f32 &zero_conc = comps.at(comps.atoms_to_id[g0_comp], gpu_id);
 				f32 &one_conc = comps.at(comps.atoms_to_id[g1_comp], gpu_id);
 				const auto push_bit = [this, &zero_conc, &one_conc](bool bit) {
@@ -201,7 +204,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 					f32 conc_sum = zero_conc + one_conc;
 					if (conc_sum < bit_cost * 64.f)
 						break;
-					if (rand() % 4000 == 0) { // length mutation
+					if (rand() % 65536 == 0) { // length mutation
 						if (rand() % 20 == 0) { // jump to random location
 							division_pos = usize(rand()) % genome.size();
 						} if (rand() % 2 == 0) { // skip some bits
@@ -347,7 +350,7 @@ void cell::test() {
 			in.push_back(u8(i));
 			out.push_back(u8(i + n));
 		}
-		proteins.push_back(protein{{}, chem_protein{in, out, 1.f}, 0, 0, {Z14}, 1.f, false});
+		proteins.push_back(protein{{}, chem_protein{in, out, 1.f}, 0, 0, {Z14}, 1.f, 0.05f, false});
 		for (usize i = 0; i < 100; i++) {
 			auto &p = proteins[0];
 			p.catalyzers.clear();
