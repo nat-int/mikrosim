@@ -168,7 +168,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 		[this, &comps, &prot, cata_effect](chem_protein &cp) {
 			for (u8 c : cp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : cp.outputs) { if (comps.locked[c]) return; }
-			f32 delta = reaction_delta(comps, prot, cata_effect * f32(proteins.size()), cp.K,
+			f32 delta = reaction_delta(comps, prot, cata_effect, cp.K,
 				cp.inputs, cp.outputs);
 			for (u8 c : cp.inputs) {
 				comps.at(c, gpu_id) -= delta;
@@ -180,7 +180,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 		[this, &comps, &prot, cata_effect](special_chem_protein &scp) {
 			for (u8 c : scp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : scp.outputs) { if (comps.locked[c]) return; }
-			f32 delta = reaction_delta(comps, prot, cata_effect * f32(proteins.size()), scp.K, scp.inputs, scp.outputs);
+			f32 delta = reaction_delta(comps, prot, cata_effect, scp.K, scp.inputs, scp.outputs);
 			if (delta < 0.001f) return;
 			f32 energy = delta * f32(-scp.energy_balance);
 			if (energy < 0.001f) return;
@@ -313,7 +313,7 @@ f32 cell::reaction_delta(compounds &comps, const protein &prot, f32 cata_effect,
 		return 0.f;
 	}
 	const f32 curr_conc_ratio = out_prod / std::max(inp_prod, 0.0001f);
-	const f32 t = std::clamp(.1f * cata_effect * prot.conc, 0.f, 1.f);
+	const f32 t = std::clamp(1.f - powf(1.f - .1f * cata_effect * prot.conc, f32(proteins.size())), 0.f, 1.f);
 	const f32 next_conc_ratio = std::lerp(curr_conc_ratio, K, t);
 	for (usize i = 0; i < fo.size(); i++) {
 		fo[i] -= fi[i] * next_conc_ratio;
