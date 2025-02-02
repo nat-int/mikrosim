@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <imgui_internal.h>
+#include "input/input.hpp"
 #include "log/log.hpp"
 #include "parse.hpp"
 #include "util.hpp"
@@ -194,15 +195,187 @@ void protein_view::generator_gen(const compounds &comps) {
 	generation.swap(next_gen);
 }
 
+void metabolism_subview::set(const cell &c) {
+	nodes.clear();
+	edges.clear();
+	for (usize i = 0; i < c.proteins.size(); i++) {
+		const protein &p = c.proteins[i];
+		std::visit(overloaded{
+			[](const empty_protein &) {},
+			[](const transcription_factor &) {},
+			[this, i](const chem_protein &cp) {
+				if (cp.K > 1.f)
+					add_prot(i, cp.inputs, cp.outputs, false);
+				else
+					add_prot(i, cp.outputs, cp.inputs, false);
+			},
+			[this, i](const special_chem_protein &scp) {
+				if (scp.K > 1.f)
+					add_prot(i, scp.inputs, scp.outputs, true);
+				else
+					add_prot(i, scp.outputs, scp.inputs, true);
+			},
+			}, p.effect);
+	}
+	view_pos = {0.f, 0.f};
+	view_scale = 1.f;
+	lock = false;
+}
+void metabolism_subview::update() {
+	if (lock)
+		return;
+	for (const edge &e : edges) {
+		glm::vec2 d = nodes[e.b].pos - nodes[e.a].pos;
+		f32 l = std::max(glm::length(d), .5f);
+		f32 fix = .01f - .6f / l;
+		nodes[e.a].pos += d * fix;
+		nodes[e.b].pos -= d * fix;
+	}
+	for (auto i = nodes.begin(); i != nodes.end(); i++) {
+		for (auto j = i+1; j != nodes.end(); j++) {
+			glm::vec2 d = j->pos - i->pos;
+			f32 l2 = glm::dot(d, d);
+			if (l2 < 2500.f) {
+				f32 fix = -10.f / std::max(l2, 0.1f);
+				i->pos += d * fix;
+				j->pos -= d * fix;
+			}
+		}
+		i->pos *= 0.999f;
+	}
+}
+
+static bool clip_line(glm::vec2 &a, glm::vec2 &b, const glm::vec2 sz) {
+	f32 ta = 0.f, tb = 1.f;
+	const glm::vec2 d = b - a;
+	auto clip = [&ta, &tb](f32 d, f32 sp) {
+		if (abs(d) < 0.001f) {
+			if (sp < 0.f) ta = 1.f;
+			return;
+		}
+		float r = sp / d;
+		if (d < 0) {
+			ta = std::max(ta, r);
+		} else {
+			tb = std::min(tb, r);
+		}
+	};
+	clip(-d.x, a.x);
+	clip(d.x,  sz.x - a.x);
+	clip(-d.y, a.y);
+	clip(d.y,  sz.y - a.y);
+	if (tb <= ta) return false;
+	b = a + tb * d;
+	a = a + ta * d;
+	return true;
+}
+
+void metabolism_subview::draw(const input::input_handler &inp, const compounds &comps) {
+	static constexpr f32 w = 300.f;
+	static constexpr f32 h = 150.f;
+	static constexpr f32 padding = 5.f;
+	static constexpr glm::vec2 pad = {padding, padding};
+	static constexpr glm::vec2 sz = {w, h};
+	ImDrawList *draw_list = ImGui::GetWindowDrawList();
+	ImVec2 pos = ImGui::GetCursorScreenPos();
+	glm::vec2 pv = glm::vec2{pos.x, pos.y};
+	f32 lw = view_scale * 3.f;
+	for (const node &n : nodes) {
+		glm::vec2 p = (n.pos - view_pos) * view_scale + sz * .5f;
+		if (glm::all(glm::greaterThanEqual(p, pad) && glm::lessThanEqual(p, sz - pad))) {
+			p += pv;
+			f32 r = view_scale * 8.f;
+			if (n.k == node::kind::protein) {
+				draw_list->AddCircle({p.x, p.y}, r, ImColor(1.f, 1.f, 1.f), 6, lw);
+			} else {
+				draw_list->AddLine({p.x, p.y-r}, {p.x, p.y}, comp_cols[comps.infos[n.id].parts[0]], lw);
+				draw_list->AddLine({p.x+r, p.y}, {p.x, p.y}, comp_cols[comps.infos[n.id].parts[1]], lw);
+				draw_list->AddLine({p.x, p.y+r}, {p.x, p.y}, comp_cols[comps.infos[n.id].parts[2]], lw);
+				draw_list->AddLine({p.x-r, p.y}, {p.x, p.y}, comp_cols[comps.infos[n.id].parts[3]], lw);
+			}
+		}
+	}
+	for (const edge &e : edges) {
+		glm::vec2 pa = (nodes[e.a].pos - view_pos) * view_scale + sz * .5f;
+		glm::vec2 pb = (nodes[e.b].pos - view_pos) * view_scale + sz * .5f;
+		const glm::vec2 d = pb - pa;
+		const glm::vec2 nd = glm::normalize(d);
+		pa += nd * 10.f * view_scale;
+		pb -= nd * 10.f * view_scale;
+		if (clip_line(pa, pb, sz)) {
+			const glm::vec2 ond = {nd.y, -nd.x};
+			pa += pv;
+			pb += pv;
+			draw_list->AddLine({pa.x, pa.y}, {pb.x, pb.y}, e.col, lw);
+			const glm::vec2 pba = pb + (ond - nd) * 5.f * view_scale;
+			draw_list->AddLine({pba.x, pba.y}, {pb.x, pb.y}, e.col, lw);
+			const glm::vec2 pbb = pb + (-ond - nd) * 5.f * view_scale;
+			draw_list->AddLine({pbb.x, pbb.y}, {pb.x, pb.y}, e.col, lw);
+		}
+	}
+	ImGui::InvisibleButton("##msv", {w, h});
+	if (ImGui::IsItemHovered()) {
+		if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+			view_pos -= inp.get_cursor_delta() / view_scale;
+		}
+		if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+			view_scale *= powf(1.05f, inp.get_cursor_delta().y);
+		}
+		if (inp.is_mouse_held(GLFW_MOUSE_BUTTON_LEFT)) {
+			const glm::vec2 cp = (inp.get_cursor_pos() - pv - sz * .5f) / view_scale + view_pos;
+			if (inp.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT)) {
+				drag = usize(-1);
+				f32 drag_d2 = 2500.f;
+				for (usize i = 0; i < nodes.size(); i++) {
+					const glm::vec2 d = nodes[i].pos - cp;
+					f32 d2 = glm::dot(d, d);
+					if (d2 < drag_d2) {
+						drag_d2 = d2;
+						drag = i;
+					}
+				}
+			}
+			if (drag < nodes.size()) {
+				nodes[drag].pos = cp;
+			}
+		}
+	}
+}
+void metabolism_subview::add_prot(usize id, const std::vector<u8> &inp, const std::vector<u8> &out, bool spec) {
+	usize ni = nodes.size();
+	nodes.push_back({{randf() * 1000.f - 500.f, randf() * 1000.f - 500.f}, id, node::kind::protein});
+	ImU32 col = spec ? ImColor(1.f, 1.f, 0.f, .7f) : ImColor(1.f, 1.f, 1.f, .7f);
+	for (u8 i : inp) {
+		add_comp_edge(ni, true, i, col);
+	}
+	for (u8 i : out) {
+		add_comp_edge(ni, false, i, col);
+	}
+}
+void metabolism_subview::add_comp_edge(usize from, bool rev, u8 comp, ImU32 col) {
+	for (usize i = 0; i < nodes.size(); i++) {
+		if (nodes[i].k == node::kind::compound && nodes[i].id == comp) {
+			edges.push_back({rev ? i : from, rev ? from : i, col});
+			return;
+		}
+	}
+	usize j = nodes.size();
+	nodes.push_back({{randf() * 1000.f - 500.f, randf() * 1000.f - 500.f}, comp, node::kind::compound});
+	edges.push_back({rev ? j : from, rev ? from : j, col});
+}
+
 cell_view::cell_view() : ext_cell(0, {}, {}), c(&ext_cell) {
 	ext_cell.genome = {};
 	file_path = "./basic.genome";
 	save_file_path = "./qs.genome";
 	follow = false;
+	msv.set(ext_cell);
 }
-void cell_view::draw(const compounds &comps, protein_view &pv) {
-	if (ext_cell.bound_factors.empty()) {
+void cell_view::draw(const input::input_handler &inp, const compounds &comps, protein_view &pv) {
+	if (ext_cell.bound_factors.empty() && !ext_cell.genome.empty()) {
 		ext_cell.analyze(comps);
+		if (c == &ext_cell)
+			msv.set(ext_cell);
 	}
 	if (ImGui::Begin("cell view")) {
 		ImGui::InputText("load file", &file_path);
@@ -211,7 +384,7 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			ext_cell.genome = load_genome(file_path);
 			ext_cell.proteins.clear();
 			ext_cell.bound_factors.clear();
-			c = &ext_cell;
+			set(&ext_cell);
 		}
 		ImGui::InputText("save file", &save_file_path);
 		ImGui::SameLine();
@@ -235,6 +408,8 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			ImGui::EndTable();
 		}
 		ImGui::Checkbox("follow", &follow);
+		ImGui::SameLine();
+		ImGui::Checkbox("lock graph", &msv.lock);
 
 		constexpr static f32 spy = 7.f;
 		constexpr static usize llen = 100;
@@ -245,6 +420,8 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 		constexpr static f32 csp = 4.f; // spacing of bars
 		constexpr static f32 cbh = 25.f; // bar height
 		ImGui::Dummy({csp * compounds::count, cbh + 28.f});
+		msv.update();
+		msv.draw(inp, comps);
 
 		usize hovered_prot = usize(-1);
 		if (ImGui::BeginTable("##proteins", 4)) {
@@ -314,7 +491,7 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 							{gpos.x + f32(j + 1) * 3.f, gpos.y + f32(i) * spy + 3.f},
 							ImColor(1.f, 1.f, .1f), 3.f);
 					}
-					if (!c->bound_factors.empty() && glm::abs(c->bound_factors[k]) > 0.01f) {
+					if (k < c->bound_factors.size() && glm::abs(c->bound_factors[k]) > 0.01f) {
 						const f32 f = c->bound_factors[k];
 						draw_list->AddLine({gpos.x + f32(j) * 3.f, gpos.y + f32(i) * spy + 3.f},
 							{gpos.x + f32(j + 1) * 3.f, gpos.y + f32(i) * spy + 3.f},
@@ -357,16 +534,14 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 			draw_list->AddLine({cpos.x + f32(i) * csp, cpos.y + cbh * (1.f - .5f * comps.at(i, c->gpu_id))},
 				{cpos.x + f32(i) * csp, cpos.y + cbh + 1.f}, ImColor(fg.r, fg.g, fg.b), 3.f);
 			const f32 center_y = cpos.y + cbh + f32(i % 3) * 10.f + 5.f;
-			for (usize j = 0; j < 4; j++) {
-				draw_list->AddLine({cpos.x + f32(i) * csp, center_y - 4.f},
-					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[0]], 2.f);
-				draw_list->AddLine({cpos.x + f32(i) * csp + 4.f, center_y},
-					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[1]], 2.f);
-				draw_list->AddLine({cpos.x + f32(i) * csp, center_y + 4.f},
-					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[2]], 2.f);
-				draw_list->AddLine({cpos.x + f32(i) * csp - 4.f, center_y},
-					{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[3]], 2.f);
-			}
+			draw_list->AddLine({cpos.x + f32(i) * csp, center_y - 4.f},
+				{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[0]], 2.f);
+			draw_list->AddLine({cpos.x + f32(i) * csp + 4.f, center_y},
+				{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[1]], 2.f);
+			draw_list->AddLine({cpos.x + f32(i) * csp, center_y + 4.f},
+				{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[2]], 2.f);
+			draw_list->AddLine({cpos.x + f32(i) * csp - 4.f, center_y},
+				{cpos.x + f32(i) * csp, center_y}, comp_cols[comps.infos[i].parts[3]], 2.f);
 		}
 	}
 	ImGui::Separator();
@@ -374,5 +549,9 @@ void cell_view::draw(const compounds &comps, protein_view &pv) {
 		ext_cell.test();
 	}
 	ImGui::End();
+}
+void cell_view::set(cell *_c) {
+	c = _c;
+	msv.set(*c);
 }
 

@@ -218,7 +218,7 @@ void mikrosim_window::update() {
 					glm::vec2 d = cursor - p->cells[i].pos;
 					if (glm::dot(d, d) < min_sqdist) {
 						min_sqdist = glm::dot(d, d);
-						cv.c = &p->cells[i];
+						cv.set(&p->cells[i]);
 					}
 				}
 			}
@@ -264,12 +264,15 @@ void mikrosim_window::update() {
 				p->comps->at(3, i) = 1.2f;
 				p->comps->at(45, i) = 0.3f;
 				p->comps->at(58, i) = 1.0f;
+				p->comps->at(63, i) = 1.0f;
 			}
 			for (usize i = 0; i < 4; i++) {
 				p->force_blocks[i] = {};
 				p->chem_blocks[i] = {};
 			}
-			cv.ext_cell.genome = load_genome("./g0");
+			cv.ext_cell.genome = load_genome("./g1");
+			cv.ext_cell.proteins.clear();
+			cv.ext_cell.bound_factors.clear();
 			cv.c = &cv.ext_cell;
 			running = true;
 		}
@@ -408,7 +411,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	ImGui::End();
 	p->imgui();
 	pv.draw(*p->comps);
-	cv.draw(*p->comps, pv);
+	cv.draw(inp, *p->comps, pv);
 	if (ImGui::Begin("extra info")) {
 		if (ImGui::BeginTable("##prot_blocks", 16)) {
 			ImGui::TableNextRow();
