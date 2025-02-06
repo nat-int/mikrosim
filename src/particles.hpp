@@ -73,6 +73,7 @@ private:
 	glm::vec4 *concs_download_map;
 	u32 next_mix_concs;
 	std::vector<u32> free_cells;
+	std::vector<u32> free_structs;
 public:
 	std::array<cell, compile_options::cell_particle_count> cells;
 	std::unique_ptr<compounds> comps;
@@ -97,5 +98,7 @@ public:
 
 	usize spawn_cell(glm::vec2 pos, glm::vec2 vel);
 	void kill_cell(u32 gpu_id);
+	usize spawn_struct(glm::vec2 pos, glm::vec2 vel);
+	void kill_struct(u32 gpu_id);
 };
 

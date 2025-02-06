@@ -17,9 +17,12 @@ namespace compile_options {
 	constexpr u32 frames_in_flight = 2;
 	constexpr u32 particle_count = 32768;
 	constexpr u32 cell_particle_count = 2048;
-	constexpr u32 env_particle_count = particle_count - cell_particle_count;
-	constexpr u32 cells_x = 100;
-	constexpr u32 cells_y = 100;
+	constexpr u32 struct_particle_count = 8192;
+	constexpr u32 no_env_particle_count = cell_particle_count + struct_particle_count;
+	constexpr u32 env_particle_count = particle_count - no_env_particle_count;
+	constexpr u32 struct_particle_start = particle_count - struct_particle_count;
+	constexpr u32 cells_x = 120;
+	constexpr u32 cells_y = 120;
 #define WINDOW_CALLBACK_GENERATOR(name) on_##name
 }
 

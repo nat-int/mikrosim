@@ -52,7 +52,7 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	ctx.set_object_name(*device, *proc.proc_buffers[report_buff-1], "particle report buffer");
 	ctx.set_object_name(*device, *proc.proc_buffers[concs_buff-1], "particle gpu concentrations buffer");
 
-	cell_stage = bh.make_staging_buffer(sizeof(particle)*compile_options::cell_particle_count*sim_frames,
+	cell_stage = bh.make_staging_buffer(sizeof(particle)*compile_options::no_env_particle_count*sim_frames,
 		vk::BufferUsageFlagBits::eTransferSrc);
 	cell_stage_map = static_cast<particle *>(cell_stage.map());
 	reports = bh.make_staging_buffer(sizeof(particle_report)*compile_options::cell_particle_count,
@@ -127,8 +127,11 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	next_cell_stage = 0;
 	for (u32 i = compile_options::cell_particle_count-1; ; i--) {
 		free_cells.push_back(i);
-		if (i == 0)
-			break;
+		if (i == 0) break;
+	}
+	for (u32 i = compile_options::struct_particle_count-1; ; i--) {
+		free_structs.push_back(i);
+		if (i == 0) break;
 	}
 	next_mix_concs = 0;
 
@@ -357,7 +360,7 @@ usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 	u32 gi = ci + compile_options::env_particle_count;
 	u32 si = next_cell_stage;
 	free_cells.pop_back();
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::cell_particle_count);
+	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	cell_stage_map[si] = {pos, 2, 0.f, vel};
 	curr_staged.push_back({si * sizeof(particle), gi * sizeof(particle), sizeof(particle)});
 	reports_map[ci].pos = pos;
@@ -371,10 +374,33 @@ usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 void particles::kill_cell(u32 gpu_id) {
 	u32 si = next_cell_stage;
 	u32 ci = gpu_id - compile_options::env_particle_count;
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::cell_particle_count);
+	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	free_cells.push_back(ci);
 	cell_stage_map[si].type = 0;
 	curr_staged.push_back({si * sizeof(particle), gpu_id * sizeof(particle), sizeof(particle)});
 	cells[ci].s = cell::state::none;
+}
+usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
+	if (free_structs.empty()) {
+		logs::errorln("not enough space for more structs");
+		return compile_options::cell_particle_count;
+	}
+	u32 si = free_structs.back();
+	u32 gi = si + compile_options::struct_particle_start;
+	u32 ssi = next_cell_stage;
+	free_structs.pop_back();
+	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
+	cell_stage_map[ssi] = {pos, 3, 0.f, vel};
+	curr_staged.push_back({ssi * sizeof(particle), gi * sizeof(particle), sizeof(particle)});
+	for (usize i = 0; i < compounds::count; i++) { comps->at(i, gi) = 0.f; }
+	return si;
+}
+void particles::kill_struct(u32 gpu_id) {
+	u32 ssi = next_cell_stage;
+	u32 si = gpu_id - compile_options::struct_particle_start;
+	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::cell_particle_count);
+	free_structs.push_back(si);
+	cell_stage_map[ssi].type = 0;
+	curr_staged.push_back({ssi * sizeof(particle), gpu_id * sizeof(particle), sizeof(particle)});
 }
 

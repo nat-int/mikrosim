@@ -233,12 +233,14 @@ void mikrosim_window::update() {
 			running = !running;
 		}
 		if (inp.is_key_down(GLFW_KEY_N) && cv.c->genome.size() > 6 && cv.c->s == cell::state::active) {
-			// TODO: bug - when spawning a cell without loading a genome first, the concentrations in it become nan
 			// adding that thing to position fixes cells spawning at -nan when in starting
 			// view for some reason, probably glm being weird with types??
 			usize id = p->spawn_cell(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
 			p->cells[id].genome = cv.c->genome; // copy genome from cell view
 			p->cells[id].analyze(*p->comps);
+		}
+		if (inp.is_key_down(GLFW_KEY_M)) {
+			p->spawn_struct(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
 		}
 		if (inp.is_key_down(GLFW_KEY_B)) {
 			for (usize i = 0; i < block_count; i++) {
