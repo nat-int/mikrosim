@@ -43,7 +43,7 @@ void main() {
 		uvec2 bot_range = (cell.y == CELLS_Y-1 ? uvec2(0, 0) :
 			uvec2(counts.data[left_cell_id+CELLS_X], counts.data[right_cell_id+CELLS_X+1]));
 
-		uint terminator = 128;
+		uint terminator = 256;
 		float density = 0;
 		float mix_density = 0;
 		for (uint i = top_range.x; i < top_range.y; i++) {

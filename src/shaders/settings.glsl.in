@@ -3,6 +3,8 @@ struct particle {
 	uint type;
 	float density;
 	vec2 vel;
+	uint bond_a;
+	uint bond_b;
 };
 struct particle_id {
 	vec2 pos;

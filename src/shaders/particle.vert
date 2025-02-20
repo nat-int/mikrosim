@@ -19,7 +19,8 @@ layout(push_constant) uniform PT {
 }*/
 
 void main() {
-	vec4 real_pos = vec4(pos + vpos * p.psize, 0, 1);
+	const float scales[] = float[4](1., 1.2, .9, .6);
+	vec4 real_pos = vec4(pos + vpos * p.psize * scales[type], 0, 1);
 	gl_Position = p.proj * real_pos;
 	fvpos = vpos;
 	fvcol = vec4(.1, .1, 1., 1.);

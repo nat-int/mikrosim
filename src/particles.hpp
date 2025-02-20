@@ -12,6 +12,9 @@ struct particle {
 	alignas(4) u32 type;
 	alignas(4) f32 density;
 	alignas(16) glm::vec2 vel;
+
+	alignas(4) u32 bond_a;
+	alignas(4) u32 bond_b;
 };
 struct particle_report {
 	alignas(8) glm::vec2 pos;
@@ -35,6 +38,11 @@ struct force_block {
 struct update_uniform {
 	force_block fbs[4];
 	chem_block chbs[4];
+};
+struct struct_particle {
+	bool active;
+	u32 bond_a;
+	u32 bond_b;
 };
 
 class particles {
@@ -64,6 +72,7 @@ private:
 	particle *cell_stage_map;
 	std::vector<vk::BufferCopy> curr_staged;
 	u32 next_cell_stage;
+	u32 next_bond_stage;
 	// consistency is not important, approximate values are enough so the data races (gpu-cpu) here are fine
 	vma::buffer reports;
 	particle_report *reports_map;
@@ -76,6 +85,7 @@ private:
 	std::vector<u32> free_structs;
 public:
 	std::array<cell, compile_options::cell_particle_count> cells;
+	std::array<struct_particle, compile_options::cell_particle_count> structs;
 	std::unique_ptr<compounds> comps;
 	cpu_timestamps cpu_ts;
 	f32 global_density;
@@ -100,5 +110,8 @@ public:
 	void kill_cell(u32 gpu_id);
 	usize spawn_struct(glm::vec2 pos, glm::vec2 vel);
 	void kill_struct(u32 gpu_id);
+	void bond(u32 gi_a, u32 gi_b);
+	void unbond(u32 gi_a, u32 gi_b);
+	void inbond(u32 gi_a, u32 gi_b, u32 gi_in);
 };
 

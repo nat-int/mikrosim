@@ -44,6 +44,7 @@ class mikrosim_window : public rend::preset::simple_window {
 	cell_view cv;
 	std::string blocks_load_path;
 	std::string blocks_save_path;
+	u32 last_struct_spawn;
 	float set_conc_target;
 public:
 	mikrosim_window();

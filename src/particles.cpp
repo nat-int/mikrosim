@@ -33,6 +33,8 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 		particle_data[i].pos = randv() * glm::fvec2{compile_options::cells_x, compile_options::cells_y};
 		particle_data[i].vel = randuv() / 1000.f;
 		particle_data[i].type = i < compile_options::env_particle_count ? 1 : 0;
+		particle_data[i].bond_a = u32(-1);
+		particle_data[i].bond_b = u32(-1);
 	}
 	proc.set_main_buffer(particle_data, vk::BufferUsageFlagBits::eVertexBuffer |
 		vk::BufferUsageFlagBits::eTransferDst);
@@ -351,6 +353,7 @@ void particles::debug_dump() const {
 	logs::debugln("dump", "------------- END PARTICLE DEBUG DUMP -------------------");
 }
 
+constexpr u32 particle_no_bonds_size = offsetof(particle, bond_a);
 usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 	if (free_cells.empty()) {
 		logs::errorln("not enough space for more cells");
@@ -361,8 +364,8 @@ usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 	u32 si = next_cell_stage;
 	free_cells.pop_back();
 	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
-	cell_stage_map[si] = {pos, 2, 0.f, vel};
-	curr_staged.push_back({si * sizeof(particle), gi * sizeof(particle), sizeof(particle)});
+	cell_stage_map[si] = {pos, 2, 0.f, vel, u32(-1), u32(-1)};
+	curr_staged.push_back({si * sizeof(particle), gi * sizeof(particle), particle_no_bonds_size});
 	reports_map[ci].pos = pos;
 	reports_map[ci].vel = vel;
 	cells[ci] = cell(gi, pos, vel);
@@ -377,7 +380,7 @@ void particles::kill_cell(u32 gpu_id) {
 	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	free_cells.push_back(ci);
 	cell_stage_map[si].type = 0;
-	curr_staged.push_back({si * sizeof(particle), gpu_id * sizeof(particle), sizeof(particle)});
+	curr_staged.push_back({si * sizeof(particle), gpu_id * sizeof(particle), particle_no_bonds_size});
 	cells[ci].s = cell::state::none;
 }
 usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
@@ -390,17 +393,44 @@ usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
 	u32 ssi = next_cell_stage;
 	free_structs.pop_back();
 	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
-	cell_stage_map[ssi] = {pos, 3, 0.f, vel};
-	curr_staged.push_back({ssi * sizeof(particle), gi * sizeof(particle), sizeof(particle)});
+	cell_stage_map[ssi] = {pos, 3, 0.f, vel, u32(-1), u32(-1)};
+	curr_staged.push_back({ssi * sizeof(particle), gi * sizeof(particle), particle_no_bonds_size});
 	for (usize i = 0; i < compounds::count; i++) { comps->at(i, gi) = 0.f; }
+	structs[si] = {true, u32(-1), u32(-1)};
 	return si;
 }
 void particles::kill_struct(u32 gpu_id) {
 	u32 ssi = next_cell_stage;
 	u32 si = gpu_id - compile_options::struct_particle_start;
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::cell_particle_count);
+	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	free_structs.push_back(si);
 	cell_stage_map[ssi].type = 0;
-	curr_staged.push_back({ssi * sizeof(particle), gpu_id * sizeof(particle), sizeof(particle)});
+	curr_staged.push_back({ssi * sizeof(particle), gpu_id * sizeof(particle), particle_no_bonds_size});
+	structs[si].active = false;
+	if (structs[si].bond_a != u32(-1)) { unbond(gpu_id, structs[si].bond_a); }
+	if (structs[si].bond_b != u32(-1)) { unbond(gpu_id, structs[si].bond_b); }
+}
+void particles::bond(u32 gi_a, u32 gi_b) {
+	u32 bi = next_bond_stage;
+	next_bond_stage = (next_bond_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
+	cell_stage_map[bi].bond_a = gi_a;
+	cell_stage_map[bi].bond_b = gi_b;
+	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_a),
+		gi_b * sizeof(particle) + offsetof(particle, bond_a), sizeof(u32)});
+	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_b),
+		gi_a * sizeof(particle) + offsetof(particle, bond_b), sizeof(u32)});
+}
+void particles::unbond(u32 gi_a, u32 gi_b) {
+	u32 bi = next_bond_stage;
+	next_bond_stage = (next_bond_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
+	cell_stage_map[bi].bond_a = u32(-1);
+	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_a),
+		gi_b * sizeof(particle) + offsetof(particle, bond_a), sizeof(u32)});
+	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_a),
+		gi_a * sizeof(particle) + offsetof(particle, bond_a), sizeof(u32)});
+}
+void particles::inbond(u32 gi_a, u32 gi_b, u32 gi_in) {
+	bond(gi_a, gi_in);
+	bond(gi_in, gi_b);
 }
 

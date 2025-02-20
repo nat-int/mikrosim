@@ -62,6 +62,18 @@ float force(float dist, float density) {
 	return (density - push.global_density) * push.stiffness * density_contribution_derivation(dist) / dist;
 }
 
+vec2 bond(vec2 pos, vec2 vel, uint bonded) {
+	const float bond_len = 0.2;
+	const float bond_strength = .001;
+	const float bond_damping = .05;
+	vec2 d = particles.data[bonded].pos - pos;
+	vec2 nd = normalize(d);
+	vec2 o = nd * (bond_strength / bond_len) * (length(d) - bond_len);
+	vec2 rv = particles.data[bonded].vel - vel - 2*o; // other particle's velocity gets affected by the spring too
+	o += nd * bond_damping * dot(rv, nd);
+	return o;
+}
+
 void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
 	if (particle_id < push.pcount) {
@@ -87,7 +99,7 @@ void main() {
 
 		vec4 concs = vec4(0, 0, 0, 0);
 
-		uint terminator = 128;
+		uint terminator = 256;
 		for (uint i = top_range.x; i < top_range.y; i++) {
 			vec2 rp = cells.data[i].pos - adj_pos;
 			float dist = max(length(rp), 0.0001);
@@ -145,6 +157,17 @@ void main() {
 		}
 		concentrations.data[particle_id] = concs;
 
+		uint bond_a = particles.data[particle_id].bond_a;
+		uint bond_b = particles.data[particle_id].bond_b;
+		if (type > 1) { // this branch should be mostly consistent in work groups since the types are grouped
+			if (bond_a != 0xffffffffu) {
+				vel += bond(pos, vel, bond_a);
+			}
+			if (bond_b != 0xffffffffu) {
+				vel += bond(pos, vel, bond_b);
+			}
+		}
+
 		vel = clamp(vel, -MAX_SPEED, MAX_SPEED);
 		pos += vel;
 		if (pos.x > CELLS_X) { pos.x = 2*CELLS_X - pos.x; vel.x = -vel.x; }
@@ -154,6 +177,8 @@ void main() {
 		particles_next.data[particle_id].pos = pos + vel;
 		particles_next.data[particle_id].vel = vel;
 		particles_next.data[particle_id].type = type;
+		particles_next.data[particle_id].bond_a = bond_a;
+		particles_next.data[particle_id].bond_b = bond_b;
 	}
 }
 

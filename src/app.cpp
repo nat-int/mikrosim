@@ -91,7 +91,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	view_position = {f32(compile_options::cells_x) / 2.f, f32(compile_options::cells_y) / 2.f};
 	update_view();
 	win.bind_scroll_callback<mikrosim_window>();
-	particle_draw_size = .6f;
+	particle_draw_size = 1.f;
 	disp_compound = 0;
 
 	prev_frame = 0.f;
@@ -128,6 +128,7 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	ImGui_ImplVulkan_Init(&imgui_vk);
 
 	pv.set_rand(*p->comps, 42);
+	last_struct_spawn = u32(-1);
 	set_conc_target = 1.f;
 }
 void mikrosim_window::terminate() {
@@ -225,10 +226,11 @@ void mikrosim_window::update() {
 		}
 	}
 	if (!ImGui::GetIO().WantCaptureKeyboard) {
-		if (inp.is_key_held(GLFW_KEY_A)) { view_position.x -= 100.f*dt/view_scale; pos_upd = true; }
-		if (inp.is_key_held(GLFW_KEY_D)) { view_position.x += 100.f*dt/view_scale; pos_upd = true; }
-		if (inp.is_key_held(GLFW_KEY_W)) { view_position.y -= 100.f*dt/view_scale; pos_upd = true; }
-		if (inp.is_key_held(GLFW_KEY_S)) { view_position.y += 100.f*dt/view_scale; pos_upd = true; }
+		f32 speed = inp.is_key_held(GLFW_KEY_LEFT_SHIFT) ? 100.f : 1000.f;
+		if (inp.is_key_held(GLFW_KEY_A)) { view_position.x -= speed*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_held(GLFW_KEY_D)) { view_position.x += speed*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_held(GLFW_KEY_W)) { view_position.y -= speed*dt/view_scale; pos_upd = true; }
+		if (inp.is_key_held(GLFW_KEY_S)) { view_position.y += speed*dt/view_scale; pos_upd = true; }
 		if (inp.is_key_down(GLFW_KEY_SPACE)) {
 			running = !running;
 		}
@@ -239,8 +241,13 @@ void mikrosim_window::update() {
 			p->cells[id].genome = cv.c->genome; // copy genome from cell view
 			p->cells[id].analyze(*p->comps);
 		}
-		if (inp.is_key_down(GLFW_KEY_M)) {
-			p->spawn_struct(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
+		if (inp.is_key_down(GLFW_KEY_M)) { // TODO: remove or document
+			usize s = p->spawn_struct(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
+			if (last_struct_spawn != u32(-1) && p->structs[last_struct_spawn].active) {
+				p->bond(u32(s + compile_options::struct_particle_start),
+					u32(last_struct_spawn + compile_options::struct_particle_start));
+			}
+			last_struct_spawn = u32(s);
 		}
 		if (inp.is_key_down(GLFW_KEY_B)) {
 			for (usize i = 0; i < block_count; i++) {
@@ -315,6 +322,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	render_ts.reset(cmd);
 	render_ts.stamp(cmd, vk::PipelineStageFlagBits::eTopOfPipe, 0);
 	begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
+
 	win.set_viewport_and_scissor(cmd);
 	rend2d->bind_solid_pipeline(cmd);
 	rend2d->push_projection(cmd, vp);
@@ -344,6 +352,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
+	ImGui::DockSpaceOverViewport(0, NULL, ImGuiDockNodeFlags_PassthruCentralNode);
 	if (ImGui::Begin("mikrosim")) {
 		ImGui::Text("%u FPS", fps); ImGui::SameLine();
 		if (running) {
