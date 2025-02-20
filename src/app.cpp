@@ -149,6 +149,30 @@ void mikrosim_window::loop() {
 		}
 	}
 	rend::simple_mesh debug_bg_mesh{buffer_h->make_device_buffer_dedicated_stage(debug_bg_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(debug_bg_vd.size())};
+	debug_bg_vd.clear();
+	debug_bg_vd.shrink_to_fit();
+	glm::vec4 crosshair_col = {0.f, 0.f, 0.f, 1.f};
+	f32 crosshair_size = 10.f;
+	std::vector<rend::vertex2d> crosshair_vd{{
+		rend::vertex2d{{-1.f, -crosshair_size}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{ 1.f, -crosshair_size}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{ 1.f,  crosshair_size}, {0.f, 0.f}, crosshair_col},
+
+		rend::vertex2d{{-1.f, -crosshair_size}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{ 1.f,  crosshair_size}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{-1.f,  crosshair_size}, {0.f, 0.f}, crosshair_col},
+
+		rend::vertex2d{{-crosshair_size, -1.f}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{-crosshair_size,  1.f}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{ crosshair_size,  1.f}, {0.f, 0.f}, crosshair_col},
+
+		rend::vertex2d{{-crosshair_size, -1.f}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{ crosshair_size,  1.f}, {0.f, 0.f}, crosshair_col},
+		rend::vertex2d{{ crosshair_size, -1.f}, {0.f, 0.f}, crosshair_col},
+	}};
+	rend::simple_mesh crosshair_mesh{buffer_h->make_device_buffer_dedicated_stage(crosshair_vd, vk::BufferUsageFlagBits::eVertexBuffer), static_cast<u32>(crosshair_vd.size())};
+	crosshair_vd.clear();
+	crosshair_vd.shrink_to_fit();
 
 	prev_frame = f32(glfwGetTime());
 	mainloop<true>(
@@ -166,7 +190,7 @@ void mikrosim_window::loop() {
 			inp.update(win);
 			update();
 		},
-		[this, &debug_bg_mesh](u32 rframe, vk::CommandBuffer cmd) {
+		[this, &debug_bg_mesh, &crosshair_mesh](u32 rframe, vk::CommandBuffer cmd) {
 			compute_ts.update();
 			render_ts.update();
 			vk::Buffer particle_buff = p->particle_buff();
@@ -189,7 +213,7 @@ void mikrosim_window::loop() {
 						*concs_isb, sizeof(std140_f32) * compile_options::particle_count);
 				}
 			}
-			render(cmd, debug_bg_mesh, particle_buff);
+			render(cmd, debug_bg_mesh, crosshair_mesh, particle_buff);
 			cmd.end();
 		},
 		[this]() {
@@ -314,7 +338,7 @@ void mikrosim_window::advance_sim(u32 rframe) {
 	p->step_cpu();
 }
 void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh,
-	vk::Buffer particle_buff) {
+	const rend::simple_mesh &crosshair_mesh, vk::Buffer particle_buff) {
 	constexpr f32 imgui_width = 300.f;
 	vk::Extent2D inner_ext = {win.vulkan_swapchain_extent().width - u32(imgui_width),
 		win.vulkan_swapchain_extent().height};
@@ -322,7 +346,6 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 	render_ts.reset(cmd);
 	render_ts.stamp(cmd, vk::PipelineStageFlagBits::eTopOfPipe, 0);
 	begin_swapchain_render_pass(cmd, {.9f, .9f, .9f, 1.f});
-
 	win.set_viewport_and_scissor(cmd);
 	rend2d->bind_solid_pipeline(cmd);
 	rend2d->push_projection(cmd, vp);
@@ -348,6 +371,10 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		cmd.bindVertexBuffers(0, *chem_quad, {0});
 		cmd.draw(6, 1, 0, 0);
 	}
+
+	rend2d->bind_solid_pipeline(cmd);
+	rend2d->push_projection(cmd, rend2d->proj(rend::anchor2d::center));
+	crosshair_mesh.bind_draw(cmd);
 
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();

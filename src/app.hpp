@@ -52,7 +52,8 @@ public:
 	void loop();
 	void update();
 	void advance_sim(u32 rframe);
-	void render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh, vk::Buffer particle_buff);
+	void render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh,
+		const rend::simple_mesh &crosshair_mesh, vk::Buffer particle_buff);
 	void on_scroll(f64 dx, f64 dy);
 private:
 	void update_view();

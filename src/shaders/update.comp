@@ -64,8 +64,8 @@ float force(float dist, float density) {
 
 vec2 bond(vec2 pos, vec2 vel, uint bonded) {
 	const float bond_len = 0.2;
-	const float bond_strength = .001;
-	const float bond_damping = .05;
+	const float bond_strength = .0005;
+	const float bond_damping = .2;
 	vec2 d = particles.data[bonded].pos - pos;
 	vec2 nd = normalize(d);
 	vec2 o = nd * (bond_strength / bond_len) * (length(d) - bond_len);
@@ -160,11 +160,12 @@ void main() {
 		uint bond_a = particles.data[particle_id].bond_a;
 		uint bond_b = particles.data[particle_id].bond_b;
 		if (type > 1) { // this branch should be mostly consistent in work groups since the types are grouped
+			vec2 ov = vel;
 			if (bond_a != 0xffffffffu) {
-				vel += bond(pos, vel, bond_a);
+				vel += bond(pos, ov, bond_a);
 			}
 			if (bond_b != 0xffffffffu) {
-				vel += bond(pos, vel, bond_b);
+				vel += bond(pos, ov, bond_b);
 			}
 		}
 
