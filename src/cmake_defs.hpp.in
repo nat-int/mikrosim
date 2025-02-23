@@ -17,9 +17,11 @@ namespace compile_options {
 	constexpr u32 frames_in_flight = ${FRAMES_IN_FLIGHT};
 	constexpr u32 particle_count = ${PARTICLE_COUNT};
 	constexpr u32 cell_particle_count = ${CELL_PARTICLE_COUNT};
+	constexpr u32 membrane_particle_count = ${MEMBRANE_PARTICLE_COUNT};
 	constexpr u32 struct_particle_count = ${STRUCT_PARTICLE_COUNT};
-	constexpr u32 no_env_particle_count = cell_particle_count + struct_particle_count;
+	constexpr u32 no_env_particle_count = cell_particle_count + membrane_particle_count + struct_particle_count;
 	constexpr u32 env_particle_count = particle_count - no_env_particle_count;
+	constexpr u32 membrane_particle_start = particle_count - struct_particle_count - membrane_particle_count;
 	constexpr u32 struct_particle_start = particle_count - struct_particle_count;
 	constexpr u32 cells_x = ${CELLS_X};
 	constexpr u32 cells_y = ${CELLS_Y};

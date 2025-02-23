@@ -57,6 +57,8 @@ struct protein_info {
 	bool is_genome_polymerase;
 	bool is_genome_repair;
 	bool is_positive_factor;
+	bool is_small_struct;
+	bool is_big_struct;
 	i32 energy_balance;
 	f32 stability;
 };
@@ -90,10 +92,14 @@ struct special_chem_protein : public chem_protein {
 	special_action act;
 	i32 energy_balance;
 };
+struct struct_protein {
+	bool big;
+	u32 curr_effect;
+};
 
 struct protein {
 	std::vector<catalyzer> catalyzers;
-	using effect_t = std::variant<empty_protein, chem_protein, transcription_factor, special_chem_protein>;
+	using effect_t = std::variant<empty_protein, chem_protein, transcription_factor, special_chem_protein, struct_protein>;
 	effect_t effect;
 	usize genome_start;
 	usize genome_end;

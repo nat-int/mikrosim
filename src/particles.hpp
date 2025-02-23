@@ -15,6 +15,8 @@ struct particle {
 
 	alignas(4) u32 bond_a;
 	alignas(4) u32 bond_b;
+
+	void set(glm::vec2 _pos, glm::vec2 _vel, u32 _type);
 };
 struct particle_report {
 	alignas(8) glm::vec2 pos;
@@ -85,7 +87,7 @@ private:
 	std::vector<u32> free_structs;
 public:
 	std::array<cell, compile_options::cell_particle_count> cells;
-	std::array<struct_particle, compile_options::cell_particle_count> structs;
+	std::array<struct_particle, compile_options::struct_particle_count> structs;
 	std::unique_ptr<compounds> comps;
 	cpu_timestamps cpu_ts;
 	f32 global_density;
@@ -100,14 +102,18 @@ public:
 		const vk::raii::DescriptorPool &dpool);
 	~particles();
 	void step_cpu();
+	void tick_cell(bool protein_creation, u32 cell_id);
 	void step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<timestamps> &ts);
 	void imgui();
 	u32 pframe() const;
 	vk::Buffer particle_buff() const;
 	void debug_dump() const;
 
+	particle *get_cell_stage(u32 target_gpu_id);
 	usize spawn_cell(glm::vec2 pos, glm::vec2 vel);
 	void kill_cell(u32 gpu_id);
+	usize spawn_membrane(glm::vec2 pos, glm::vec2 vel, u32 cell_id, u32 type=4);
+	void kill_membrane(u32 gpu_id);
 	usize spawn_struct(glm::vec2 pos, glm::vec2 vel);
 	void kill_struct(u32 gpu_id);
 	void bond(u32 gi_a, u32 gi_b);

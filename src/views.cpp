@@ -90,14 +90,15 @@ void protein_view::draw(const compounds &comps) {
 		}
 		if (ImGui::BeginTable("##other_info", 2)) {
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is genome polymerase");
-			ImGui::TableNextColumn();
-			ImGui::Text("%s", (info.is_genome_polymerase ? "yes" : "no"));
+			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_genome_polymerase ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is genome repair");
-			ImGui::TableNextColumn();
-			ImGui::Text("%s", (info.is_genome_repair ? "yes" : "no"));
+			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_genome_repair ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is positive factor");
-			ImGui::TableNextColumn();
-		 	ImGui::Text("%s", (info.is_positive_factor ? "yes" : "no"));
+			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_positive_factor ? "yes" : "no"));
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is small struct");
+			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_small_struct ? "yes" : "no"));
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is big struct");
+			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_big_struct ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("reaction energy change");
 			ImGui::TableNextColumn(); ImGui::Text("%" PRIi32, info.energy_balance);
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("stability");
@@ -215,6 +216,7 @@ void metabolism_subview::set(const cell &c) {
 				else
 					add_prot(i, scp.outputs, scp.inputs, true);
 			},
+			[](const struct_protein &) {},
 			}, p.effect);
 	}
 	view_pos = {0.f, 0.f};
@@ -455,16 +457,17 @@ void cell_view::draw(const input::input_handler &inp, const compounds &comps, pr
 				ImGui::TableNextColumn(); ImGui::Text("%.4lf", f64(p.conc));
 				ImGui::TableNextColumn();
 				std::visit(overloaded{
-					[](empty_protein &) { ImGui::Text("-"); },
-					[](transcription_factor &tf) { ImGui::Text("TF %.3lf", f64(tf.curr_effect)); },
-					[](chem_protein &cp) { ImGui::Text("ENZ, K=%.3lf", f64(cp.K)); },
-					[](special_chem_protein &scp) {
+					[](const empty_protein &) { ImGui::Text("-"); },
+					[](const transcription_factor &tf) { ImGui::Text("TF %.3lf", f64(tf.curr_effect)); },
+					[](const chem_protein &cp) { ImGui::Text("ENZ, K=%.3lf", f64(cp.K)); },
+					[](const special_chem_protein &scp) {
 						switch (scp.act) {
 						case special_action::division: ImGui::Text("genome polymerase"); break;
 						case special_action::repair: ImGui::Text("genome repair"); break;
 						default: ImGui::Text("unknown special action!"); break;
 						}
 					},
+					[](const struct_protein &sp) { ImGui::Text(sp.big ? "big struct" : "small struct"); },
 				}, p.effect);
 				ImGui::PopID();
 			}

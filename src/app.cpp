@@ -237,7 +237,7 @@ void mikrosim_window::update() {
 		if (inp.is_mouse_down(GLFW_MOUSE_BUTTON_LEFT)) {
 			glm::vec2 cursor = (inp.get_cursor_pos() - glm::vec2{win.width(), win.height()} * .5f) /
 				view_scale + view_position;
-			f32 min_sqdist = 100.f;
+			f32 min_sqdist = 9.f;
 			for (usize i = 0; i < compile_options::cell_particle_count; i++) {
 				if (p->cells[i].s == cell::state::active) {
 					glm::vec2 d = cursor - p->cells[i].pos;
@@ -265,7 +265,7 @@ void mikrosim_window::update() {
 			p->cells[id].genome = cv.c->genome; // copy genome from cell view
 			p->cells[id].analyze(*p->comps);
 		}
-		if (inp.is_key_down(GLFW_KEY_M)) { // TODO: remove or document
+		if (inp.is_key_down(GLFW_KEY_M)) {
 			usize s = p->spawn_struct(view_position + glm::vec2{.0001f, .0001f}, {0.f, 0.f});
 			if (last_struct_spawn != u32(-1) && p->structs[last_struct_spawn].active) {
 				p->bond(u32(s + compile_options::struct_particle_start),
@@ -511,6 +511,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 			"drag with scroll wheel pressed - pan view\n[W][S][A][D] - move view\n"
 			"scroll - zoom\n[shift]+scroll - zoom (slower)\n"
 			"[N] - spawn new cell with genome copied from cell view\n"
+			"[M] - spawn new struct particle, chained to the previous one\n"
 			"[B] - set all block concentrations everywhere\n"
 			"[G] - set all genome compound concentrations everywhere");
 	}

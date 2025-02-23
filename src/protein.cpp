@@ -98,6 +98,24 @@ protein_info folder::analyze(const compounds &comp) const {
 	}
 	out.stability = 1.f - expf(-stability_factor*.25f) * .15f; // just feels nice
 	out.stability = std::min(out.stability, 0.99f);
+	// check 
+	if (width == 3 && height == 3) {
+		out.is_small_struct = true;
+		for (i32 i = 0; usize(i) < width; i++) {
+			if (at(i, 0).empty()) { out.is_small_struct = false; break; }
+			if (at(i, i32(height-1)).empty()) { out.is_small_struct = false; break; }
+			if (at(0, i).empty()) { out.is_small_struct = false; break; }
+			if (at(i32(width-1), i).empty()) { out.is_small_struct = false; break; }
+		}
+	} else if (width == 5 && height == 5) {
+		out.is_big_struct = true;
+		for (i32 i = 0; usize(i) < width; i++) {
+			if (at(i, 0).empty()) { out.is_big_struct = false; break; }
+			if (at(i, i32(height-1)).empty()) { out.is_big_struct = false; break; }
+			if (at(0, i).empty()) { out.is_big_struct = false; break; }
+			if (at(i32(width-1), i).empty()) { out.is_big_struct = false; break; }
+		}
+	}
 	// check edges for genome binding sites (which make the protein a transcription factor)
 	usize max_genome_site_pos;
 	std::vector<bool> max_genome_site;

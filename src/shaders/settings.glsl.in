@@ -17,3 +17,7 @@ struct particle_id {
 const float mix_factors[] = float[4](0,1,1,0);
 const uint CELLS_X = ${CELLS_X};
 const uint CELLS_Y = ${CELLS_Y};
+const uint CELLP_START = ${PARTICLE_COUNT} - ${STRUCT_PARTICLE_COUNT} - ${MEMBRANE_PARTICLE_COUNT} - ${CELL_PARTICLE_COUNT};
+const uint CELLP_COUNT = ${CELL_PARTICLE_COUNT};
+const uint MEMBRANEP_START = CELLP_START + CELLP_COUNT;
+const uint MEMBRANEP_COUNT = ${MEMBRANE_PARTICLE_COUNT};

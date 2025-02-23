@@ -11,10 +11,12 @@
 
 static constexpr u32 max_health = 1000;
 
-cell::cell() : s(state::none) { }
+cell::cell() : s(state::none), membrane_particles(0) { }
 cell::cell(u32 gi, glm::vec2 p, glm::vec2 v) : s(state::active), gpu_id(gi), pos(p), vel(v),
-	division_pos(0), next_update(0), next_create(0), health(max_health) {
-}
+	division_pos(0), next_update(0), next_create(0), health(max_health), membrane_particles(0),
+	big_struct_id(u8(-1)),
+	membrane_bonds({glm::uvec2{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)}}),
+	small_struct(0), small_struct_effective(0), big_struct(0), big_struct_effective(0) { }
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 void cell::update(compounds &comps, bool protein_create) {
@@ -60,6 +62,10 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 				bind_points.push_back(i);
 		}
 		e = transcription_factor{bind_points, info.is_positive_factor, 0.f};
+	} else if (info.is_small_struct) {
+		e = struct_protein{false, 0};
+	} else if (info.is_big_struct) {
+		e = struct_protein{true, 0};
 	} else if (info.reaction_input.empty()) {
 		e = empty_protein{};
 	} else {
@@ -113,7 +119,7 @@ u8 cell::genome_quad(usize i) const {
 void cell::create_tick(compounds &comps, protein &prot) {
 	// TODO: creating proteins shouldn't be free (in energy)
 	f32 denat = (1.f - powf(prot.stability, f32(proteins.size()))) * prot.conc;
-	f32 create_pos = (prot.direct_transcription ? 1.f : -bound_factors[prot.genome_start]);
+	f32 create_pos = (prot.direct_transcription ? .5f : -bound_factors[prot.genome_start]);
 	for (usize i = prot.genome_start + 1; i < prot.genome_end; i++) {
 		create_pos -= std::max(bound_factors[i], 0.f); // only negative factors afterwards
 	}
@@ -129,6 +135,19 @@ void cell::create_tick(compounds &comps, protein &prot) {
 	prot.conc += delta;
 	for (usize i = 0; i < block_count; i++) { // "denaturated" "proteins" "decompose" instantly :)
 		comps.at(comps.atoms_to_id[block_compounds[i]], gpu_id) -= delta * prot.cost[i];
+	}
+	if (std::holds_alternative<struct_protein>(prot.effect)) {
+		auto &sp = std::get<struct_protein>(prot.effect);
+		const u32 eff = u32(std::max(prot.conc, 0.f) * 200.f);
+		if (sp.big) {
+			big_struct -= sp.curr_effect;
+			sp.curr_effect = eff;
+			big_struct += sp.curr_effect;
+		} else {
+			small_struct -= sp.curr_effect;
+			sp.curr_effect = eff;
+			small_struct += sp.curr_effect;
+		}
 	}
 }
 void cell::update_tick(compounds &comps, protein &prot) {
@@ -250,6 +269,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				comps.at(c, gpu_id) += delta;
 			}
 		},
+		[](struct_protein &) { }
 		}, prot.effect);
 }
 static f32 min_norm(f32 x, f32 n) {

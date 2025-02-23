@@ -62,9 +62,7 @@ float force(float dist, float density) {
 	return (density - push.global_density) * push.stiffness * density_contribution_derivation(dist) / dist;
 }
 
-vec2 bond(vec2 pos, vec2 vel, uint bonded) {
-	const float bond_len = 0.2;
-	const float bond_strength = .0005;
+vec2 bond(vec2 pos, vec2 vel, uint bonded, float bond_len, float bond_strength) {
 	const float bond_damping = .2;
 	vec2 d = particles.data[bonded].pos - pos;
 	vec2 nd = normalize(d);
@@ -157,15 +155,39 @@ void main() {
 		}
 		concentrations.data[particle_id] = concs;
 
+		vec2 ov = vel;
+		if (type == 2) {
+			for (uint i = 0; i < 4; i++) {
+				uint j = MEMBRANEP_START + 4*(particle_id - CELLP_START) + i;
+				if (particles.data[j].type == 4 || particles.data[j].type == 5) {
+					vel += bond(pos, ov, j, 1.0, .002);
+				}
+			}
+		} else if (type == 4) {
+			uint i = CELLP_START + (particle_id - MEMBRANEP_START)/4;
+			if (particles.data[i].type == 2) {
+				vel += bond(pos, ov, i, 1.0, .002);
+			}
+		} else if (type == 5) {
+			uint i = CELLP_START + (particle_id - MEMBRANEP_START)/4;
+			if (particles.data[i].type == 2) {
+				vel += bond(pos, ov, i, 1.0, .002);
+			}
+			uint js = ((particle_id - MEMBRANEP_START) & ~3) + MEMBRANEP_START;
+			for (uint j = js; j < js+4; j++) {
+				if (j != particle_id && particles.data[j].type == 5) {
+					vel += bond(pos, ov, j, 3.4641016151377, .005);// 2*3^.5 (side of eqilat. tri. with R=1.0)
+				}
+			}
+		}
 		uint bond_a = particles.data[particle_id].bond_a;
 		uint bond_b = particles.data[particle_id].bond_b;
-		if (type > 1) { // this branch should be mostly consistent in work groups since the types are grouped
-			vec2 ov = vel;
-			if (bond_a != 0xffffffffu) {
-				vel += bond(pos, ov, bond_a);
+		if (type > 2) { // this branch should be mostly consistent in work groups since the types are grouped
+			if (bond_a != 0xffffffffu && bond_a != particle_id) {
+				vel += bond(pos, ov, bond_a, 0.3, .0005);
 			}
-			if (bond_b != 0xffffffffu) {
-				vel += bond(pos, ov, bond_b);
+			if (bond_b != 0xffffffffu && bond_b != particle_id) {
+				vel += bond(pos, ov, bond_b, 0.3, .0005);
 			}
 		}
 

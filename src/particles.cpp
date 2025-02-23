@@ -24,6 +24,13 @@ struct particle_id {
 	alignas(16) glm::vec4 concentration;
 };
 
+void particle::set(glm::vec2 _pos, glm::vec2 _vel, u32 _type) {
+	pos = _pos;
+	type = _type;
+	density = 0.f;
+	vel = _vel;
+}
+
 particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	const rend::buffer_handler &bh, const vk::raii::DescriptorPool &dpool) : proc(device, bh),
 	cell_stage(nullptr), reports(nullptr), concs_upload(nullptr), concs_download(nullptr),
@@ -173,26 +180,65 @@ void particles::step_cpu() {
 		}
 	}
 	for (u32 i = 0; i < compile_options::cell_particle_count; i++) {
-		if (cells[i].s != cell::state::none) {
-			cells[i].pos = reports_map[i].pos;
-			cells[i].vel = reports_map[i].vel;
-			cells[i].update(*comps, protein_creation);
-			if (cells[i].health < 1) {
-				kill_cell(cells[i].gpu_id);
-			} else if (cells[i].division_pos >= cells[i].genome.size()) {
-				cells[i].division_pos = 0;
-				usize ci = spawn_cell(cells[i].pos, cells[i].vel);
-				if (ci == compile_options::cell_particle_count) {
-					cells[i].division_genome.clear();
-					continue;
-				}
-				cells[ci].health = (cells[i].health * 7 + cells[ci].health) / 8;
-				cells[ci].genome.swap(cells[i].division_genome);
-				cells[ci].analyze(*comps);
-			}
-		}
+		tick_cell(protein_creation, i);
 	}
 	cpu_ts.stamp();
+}
+void particles::tick_cell(bool protein_creation, u32 cell_id) {
+	cell &c = cells[cell_id];
+	if (c.s != cell::state::none) {
+		c.pos = reports_map[cell_id].pos;
+		c.vel = reports_map[cell_id].vel;
+		c.update(*comps, protein_creation);
+		if (c.health < 1) {
+			kill_cell(c.gpu_id);
+			return;
+		}
+		if (protein_creation) {
+			u32 membrane_ids = compile_options::membrane_particle_start + 4*cell_id;
+			const u32 big_struct_cost = 100;
+			const u32 small_struct_cost = 50;
+			if (c.big_struct < c.big_struct_effective) {
+				kill_membrane(membrane_ids + c.big_struct_id);
+				c.big_struct_effective -= big_struct_cost;
+				c.big_struct_id = u8(-1);
+			} else if (c.big_struct > c.big_struct_effective+big_struct_cost &&
+				c.big_struct_id != u8(-1) && c.membrane_particles != 0xf) {
+				c.big_struct_effective += big_struct_cost;
+				c.big_struct_id = u8(spawn_membrane(c.pos + randuv(), c.vel, cell_id));
+			}
+			u8 smp = c.big_struct_id == u8(-1) ? c.membrane_particles :
+				(c.membrane_particles & ~(1 << c.big_struct_id));
+			if (c.small_struct < c.small_struct_effective) {
+				kill_membrane(membrane_ids + u32(std::countr_zero(smp)));
+				c.small_struct_effective -= small_struct_cost;
+			} else if (c.small_struct > c.small_struct_effective+small_struct_cost &&
+				c.membrane_particles != 0xf) {
+				c.small_struct_effective += small_struct_cost;
+				u32 gmi = membrane_ids + u32(spawn_membrane(c.pos + randuv(), c.vel, cell_id, 5));
+				if (smp != 0) {
+					u32 o = membrane_ids + u32(std::countr_zero(smp));
+					glm::uvec2 ob = c.membrane_bonds[o - membrane_ids];
+					u32 prevb = ob.x == u32(-1) ? o : ob.x;
+					inbond(prevb, o, gmi);
+					c.membrane_bonds[prevb - membrane_ids].y = gmi;
+					c.membrane_bonds[gmi - membrane_ids] = {prevb, o};
+					c.membrane_bonds[o - membrane_ids].x = gmi;
+				}
+			}
+		}
+		if (c.division_pos >= c.genome.size()) {
+			c.division_pos = 0;
+			usize ci = spawn_cell(c.pos + randuv(), c.vel);
+			if (ci == compile_options::cell_particle_count) {
+				c.division_genome.clear();
+				return;
+			}
+			cells[ci].health = (c.health * 7 + cells[ci].health) / 8;
+			cells[ci].genome.swap(c.division_genome);
+			cells[ci].analyze(*comps);
+		}
+	}
 }
 void particles::step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<timestamps> &ts) {
 	static_cast<void>(frame);
@@ -354,6 +400,12 @@ void particles::debug_dump() const {
 }
 
 constexpr u32 particle_no_bonds_size = offsetof(particle, bond_a);
+particle *particles::get_cell_stage(u32 target_gpu_id) {
+	u32 si = next_cell_stage;
+	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
+	curr_staged.push_back({si*sizeof(particle), target_gpu_id*sizeof(particle), particle_no_bonds_size});
+	return &cell_stage_map[si];
+}
 usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 	if (free_cells.empty()) {
 		logs::errorln("not enough space for more cells");
@@ -361,11 +413,8 @@ usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 	}
 	u32 ci = free_cells.back();
 	u32 gi = ci + compile_options::env_particle_count;
-	u32 si = next_cell_stage;
 	free_cells.pop_back();
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
-	cell_stage_map[si] = {pos, 2, 0.f, vel, u32(-1), u32(-1)};
-	curr_staged.push_back({si * sizeof(particle), gi * sizeof(particle), particle_no_bonds_size});
+	get_cell_stage(gi)->set(pos, vel, 2);
 	reports_map[ci].pos = pos;
 	reports_map[ci].vel = vel;
 	cells[ci] = cell(gi, pos, vel);
@@ -375,13 +424,31 @@ usize particles::spawn_cell(glm::vec2 pos, glm::vec2 vel) {
 	return ci;
 }
 void particles::kill_cell(u32 gpu_id) {
-	u32 si = next_cell_stage;
 	u32 ci = gpu_id - compile_options::env_particle_count;
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	free_cells.push_back(ci);
-	cell_stage_map[si].type = 0;
-	curr_staged.push_back({si * sizeof(particle), gpu_id * sizeof(particle), particle_no_bonds_size});
+	get_cell_stage(gpu_id)->type = 0;
 	cells[ci].s = cell::state::none;
+	for (u32 i = 0; i < 4; i++) {
+		if ((cells[ci].membrane_particles >> i) & 1) {
+			kill_membrane(compile_options::membrane_particle_start + 4*ci + i);
+		}
+	}
+}
+usize particles::spawn_membrane(glm::vec2 pos, glm::vec2 vel, u32 cell_id, u32 type) {
+	u32 mi = u32(std::countr_one(cells[cell_id].membrane_particles));
+	cells[cell_id].membrane_particles |= 1 << mi;
+	cells[cell_id].membrane_bonds[mi] = {u32(-1), u32(-1)};
+	u32 gi = compile_options::membrane_particle_start + 4 * cell_id + mi;
+	get_cell_stage(gi)->set(pos, vel, type);
+	return mi;
+}
+void particles::kill_membrane(u32 gpu_id) {
+	get_cell_stage(gpu_id)->type = 0;
+	u32 ci = (gpu_id - compile_options::membrane_particle_start) / 4;
+	u32 mi = (gpu_id - compile_options::membrane_particle_start) % 4;
+	cells[ci].membrane_particles &= ~(1 << mi);
+	if (cells[ci].membrane_bonds[mi].x != u32(-1)) { unbond(cells[ci].membrane_bonds[mi].x, gpu_id); }
+	if (cells[ci].membrane_bonds[mi].y != u32(-1)) { unbond(gpu_id, cells[ci].membrane_bonds[mi].y); }
 }
 usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
 	if (free_structs.empty()) {
@@ -390,24 +457,18 @@ usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
 	}
 	u32 si = free_structs.back();
 	u32 gi = si + compile_options::struct_particle_start;
-	u32 ssi = next_cell_stage;
 	free_structs.pop_back();
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
-	cell_stage_map[ssi] = {pos, 3, 0.f, vel, u32(-1), u32(-1)};
-	curr_staged.push_back({ssi * sizeof(particle), gi * sizeof(particle), particle_no_bonds_size});
+	get_cell_stage(gi)->set(pos, vel, 3);
 	for (usize i = 0; i < compounds::count; i++) { comps->at(i, gi) = 0.f; }
 	structs[si] = {true, u32(-1), u32(-1)};
 	return si;
 }
 void particles::kill_struct(u32 gpu_id) {
-	u32 ssi = next_cell_stage;
 	u32 si = gpu_id - compile_options::struct_particle_start;
-	next_cell_stage = (next_cell_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	free_structs.push_back(si);
-	cell_stage_map[ssi].type = 0;
-	curr_staged.push_back({ssi * sizeof(particle), gpu_id * sizeof(particle), particle_no_bonds_size});
+	get_cell_stage(gpu_id)->type = 0;
 	structs[si].active = false;
-	if (structs[si].bond_a != u32(-1)) { unbond(gpu_id, structs[si].bond_a); }
+	if (structs[si].bond_a != u32(-1)) { unbond(structs[si].bond_a, gpu_id); }
 	if (structs[si].bond_b != u32(-1)) { unbond(gpu_id, structs[si].bond_b); }
 }
 void particles::bond(u32 gi_a, u32 gi_b) {
@@ -426,8 +487,8 @@ void particles::unbond(u32 gi_a, u32 gi_b) {
 	cell_stage_map[bi].bond_a = u32(-1);
 	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_a),
 		gi_b * sizeof(particle) + offsetof(particle, bond_a), sizeof(u32)});
-	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_a),
-		gi_a * sizeof(particle) + offsetof(particle, bond_a), sizeof(u32)});
+	curr_staged.push_back({bi * sizeof(particle) + offsetof(particle, bond_b),
+		gi_a * sizeof(particle) + offsetof(particle, bond_b), sizeof(u32)});
 }
 void particles::inbond(u32 gi_a, u32 gi_b, u32 gi_in) {
 	bond(gi_a, gi_in);

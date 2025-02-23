@@ -15,11 +15,13 @@ namespace compile_options {
 	constexpr bool vulkan_validation_supress_loader_info = 1;
 	constexpr bool vulkan_validation_abort = 0;
 	constexpr u32 frames_in_flight = 2;
-	constexpr u32 particle_count = 32768;
-	constexpr u32 cell_particle_count = 2048;
+	constexpr u32 particle_count = 40960;
+	constexpr u32 cell_particle_count = 1024;
+	constexpr u32 membrane_particle_count = 4096;
 	constexpr u32 struct_particle_count = 8192;
-	constexpr u32 no_env_particle_count = cell_particle_count + struct_particle_count;
+	constexpr u32 no_env_particle_count = cell_particle_count + membrane_particle_count + struct_particle_count;
 	constexpr u32 env_particle_count = particle_count - no_env_particle_count;
+	constexpr u32 membrane_particle_start = particle_count - struct_particle_count - membrane_particle_count;
 	constexpr u32 struct_particle_start = particle_count - struct_particle_count;
 	constexpr u32 cells_x = 120;
 	constexpr u32 cells_y = 120;
