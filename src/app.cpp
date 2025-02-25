@@ -290,14 +290,16 @@ void mikrosim_window::update() {
 			set_conc_target = .3f;
 			for (usize i = 0; i < compile_options::particle_count; i++) {
 				for (usize j = 0; j < block_count; j++) {
-					p->comps->at(p->comps->atoms_to_id[block_compounds[j]], i) = .2f;
+					p->comps->at(p->comps->atoms_to_id[block_compounds[j]], i) = .4f;
 				}
-				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = .07f;
-				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = .07f;
-				p->comps->at(3, i) = 1.2f;
+				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = .3f;
+				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = .3f;
+				p->comps->at(3, i) = 1.6f; // g1 metabolism
 				p->comps->at(45, i) = 0.3f;
-				p->comps->at(58, i) = 1.0f;
+				p->comps->at(58, i) = 1.4f;
 				p->comps->at(63, i) = 1.0f;
+				p->comps->at(46, i) = 0.3f; // membranes
+				p->comps->at(47, i) = 0.3f;
 			}
 			for (usize i = 0; i < 4; i++) {
 				p->force_blocks[i] = {};

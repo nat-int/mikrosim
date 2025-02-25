@@ -99,6 +99,8 @@ void protein_view::draw(const compounds &comps) {
 			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_small_struct ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is big struct");
 			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_big_struct ? "yes" : "no"));
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("is struct synthesizer");
+			ImGui::TableNextColumn(); ImGui::Text("%s", (info.is_struct_synthesizer ? "yes" : "no"));
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("reaction energy change");
 			ImGui::TableNextColumn(); ImGui::Text("%" PRIi32, info.energy_balance);
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("stability");
@@ -407,6 +409,10 @@ void cell_view::draw(const input::input_handler &inp, const compounds &comps, pr
 			ImGui::TableNextColumn(); ImGui::Text("%zu / %zu", c->division_pos, c->genome.size());
 			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("health");
 			ImGui::TableNextColumn(); ImGui::Text("%" PRIu32, c->health);
+			ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TableHeader("membrane states");
+			ImGui::TableNextColumn(); ImGui::Text("s %" PRIu32 "/%" PRIu32 " b %" PRIu32 "/%" PRIu32
+					" + %" PRIu32, c->small_struct, c->small_struct_effective, c->big_struct,
+					c->big_struct_effective, c->membrane_add);
 			ImGui::EndTable();
 		}
 		ImGui::Checkbox("follow", &follow);
@@ -426,13 +432,21 @@ void cell_view::draw(const input::input_handler &inp, const compounds &comps, pr
 		msv.draw(inp, comps);
 
 		usize hovered_prot = usize(-1);
+		usize empty_count = 0;
 		if (ImGui::BeginTable("##proteins", 4)) {
 			ImGui::TableNextRow(); ImGui::TableNextColumn();
 			ImGui::TableNextColumn(); ImGui::TableHeader("genome range");
 			ImGui::TableNextColumn(); ImGui::TableHeader("concentration");
 			ImGui::TableNextColumn(); ImGui::TableHeader("effect");
 			usize i = 0;
+			std::vector<usize> real_ids;
 			for (protein &p : c->proteins) {
+				if (std::holds_alternative<empty_protein>(p.effect)) {
+					empty_count++;
+					i++;
+					continue;
+				}
+				real_ids.push_back(i);
 				ImGui::PushID(("##id"+std::to_string(i++)).c_str());
 				ImGui::TableNextRow(); ImGui::TableNextColumn();
 				if (ImGui::Button("show")) {
@@ -464,6 +478,7 @@ void cell_view::draw(const input::input_handler &inp, const compounds &comps, pr
 						switch (scp.act) {
 						case special_action::division: ImGui::Text("genome polymerase"); break;
 						case special_action::repair: ImGui::Text("genome repair"); break;
+						case special_action::struct_synthesize: ImGui::Text("struct synthesizer"); break;
 						default: ImGui::Text("unknown special action!"); break;
 						}
 					},
@@ -472,8 +487,10 @@ void cell_view::draw(const input::input_handler &inp, const compounds &comps, pr
 				ImGui::PopID();
 			}
 			hovered_prot = usize(ImGui::TableGetHoveredRow()-1);
+			hovered_prot = hovered_prot < real_ids.size() ? real_ids[hovered_prot] : hovered_prot;
 			ImGui::EndTable();
 		}
+		ImGui::Text("+%zu empty proteins", empty_count);
 
 		ImDrawList *draw_list = ImGui::GetWindowDrawList();
 		const bool hover_tf = hovered_prot < c->proteins.size() &&

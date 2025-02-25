@@ -140,8 +140,9 @@ void main() {
 		for (uint i = 0; i < 4; i++) {
 			vec2 rp = unif.fbl[i].pos_ext.xy - pos;
 			if (all(lessThan(abs(rp), unif.fbl[i].pos_ext.zw))) {
-				vel += unif.fbl[i].cart_polar.xy;
-				vel += mat2(vec2(-rp.y, rp.x), rp) * unif.fbl[i].cart_polar.zw;
+				vec2 tv = unif.fbl[i].cart_polar.xy +
+					mat2(vec2(-rp.y, rp.x), rp) * unif.fbl[i].cart_polar.zw;
+				vel += tv;
 			}
 		}
 		for (uint i = 0; i < 4; i++) {
@@ -159,14 +160,13 @@ void main() {
 		if (type == 2) {
 			for (uint i = 0; i < 4; i++) {
 				uint j = MEMBRANEP_START + 4*(particle_id - CELLP_START) + i;
-				if (particles.data[j].type == 4 || particles.data[j].type == 5) {
-					vel += bond(pos, ov, j, 1.0, .002);
-				}
+				if (particles.data[j].type == 4) { vel += bond(pos, ov, j, 1.5, .002); }
+				if (particles.data[j].type == 5) { vel += bond(pos, ov, j, 1., .002); }
 			}
 		} else if (type == 4) {
 			uint i = CELLP_START + (particle_id - MEMBRANEP_START)/4;
 			if (particles.data[i].type == 2) {
-				vel += bond(pos, ov, i, 1.0, .002);
+				vel += bond(pos, ov, i, 1.5, .002);
 			}
 		} else if (type == 5) {
 			uint i = CELLP_START + (particle_id - MEMBRANEP_START)/4;
@@ -176,7 +176,7 @@ void main() {
 			uint js = ((particle_id - MEMBRANEP_START) & ~3) + MEMBRANEP_START;
 			for (uint j = js; j < js+4; j++) {
 				if (j != particle_id && particles.data[j].type == 5) {
-					vel += bond(pos, ov, j, 3.4641016151377, .005);// 2*3^.5 (side of eqilat. tri. with R=1.0)
+					vel += bond(pos, ov, j, 3.4641016151377, .02);// 2*3^.5 (side of eqilat. tri. with R=1.0)
 				}
 			}
 		}
@@ -184,10 +184,10 @@ void main() {
 		uint bond_b = particles.data[particle_id].bond_b;
 		if (type > 2) { // this branch should be mostly consistent in work groups since the types are grouped
 			if (bond_a != 0xffffffffu && bond_a != particle_id) {
-				vel += bond(pos, ov, bond_a, 0.3, .0005);
+				vel += bond(pos, ov, bond_a, 0.3, .002);
 			}
 			if (bond_b != 0xffffffffu && bond_b != particle_id) {
-				vel += bond(pos, ov, bond_b, 0.3, .0005);
+				vel += bond(pos, ov, bond_b, 0.3, .002);
 			}
 		}
 

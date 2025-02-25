@@ -27,6 +27,8 @@ public:
 	std::array<glm::uvec2, 4> membrane_bonds;
 	u32 small_struct, small_struct_effective;
 	u32 big_struct, big_struct_effective;
+	u32 membrane_add;
+	u32 structs_used;
 
 	cell();
 	cell(u32 gi, glm::vec2 p, glm::vec2 v);

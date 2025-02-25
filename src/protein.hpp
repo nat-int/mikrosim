@@ -8,6 +8,8 @@ class compounds;
 
 constexpr u8 g0_comp = 0b00'01'11'01;
 constexpr u8 g1_comp = 0b01'10'01'11;
+constexpr u8 struct_a_comp = 0b01'01'01'01;
+constexpr u8 struct_b_comp = 0b01'01'01'10;
 constexpr u8 start_quad = 0b1010;
 constexpr u8 stop_quad = 0b1110; // should be one of the double-covered blocks
 constexpr const char *quads_chr = "0123456789abcdef";
@@ -56,6 +58,7 @@ struct protein_info {
 	std::vector<bool> genome_binder;
 	bool is_genome_polymerase;
 	bool is_genome_repair;
+	bool is_struct_synthesizer;
 	bool is_positive_factor;
 	bool is_small_struct;
 	bool is_big_struct;
@@ -87,7 +90,7 @@ struct transcription_factor {
 	bool positive;
 	f32 curr_effect;
 };
-enum class special_action { division, repair };
+enum class special_action { division, repair, struct_synthesize };
 struct special_chem_protein : public chem_protein {
 	special_action act;
 	i32 energy_balance;

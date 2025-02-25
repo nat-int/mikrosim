@@ -58,12 +58,22 @@ struct binding_site {
 		const u8 map[4] = { 2, 1, 0, 3 };
 		return compound(map[u], map[r], map[d], map[l]).atoms;
 	}
+	u8 comp_unk_up() const {
+		const u8 map[4] = { 2, 1, 0, 3 };
+		if (l == 255) return u8(map[u] << 4 | map[r] << 2 | map[d]);
+		if (r == 255) return u8(map[u] | map[d] << 4 | map[l] << 2);
+		if (u == 255) return u8(map[r] << 4 | map[d] << 2 | map[l]);
+		return u8(map[u] << 2 | map[r] | map[l] << 4);
+	}
 	u8 comp_nr() const {
 		const u8 map[4] = { 2, 1, 0, 3 };
 		return u8(map[u] << 6 | map[r] << 4 | map[d] << 2 | map[l]);
 	}
 	glm::vec2 pos(usize height) const { return {f32(u32(i / height)), f32(i % height)}; }
 };
+static std::pair<u8, u8> order(std::pair<u8, u8> x) {
+	return x.first > x.second ? std::pair<u8, u8>(x.second, x.first) : x;
+}
 protein_info folder::analyze(const compounds &comp) const {
 	protein_info out{};
 	f32 stability_factor = 0.f;
@@ -93,12 +103,31 @@ protein_info folder::analyze(const compounds &comp) const {
 				active_sites.push_back(binding_site{l, r, u, d, i});
 			}
 		} else if (c255 == 1) {
-			catalysis_sites.push_back(binding_site{l, r, u, d, i});
+			binding_site b = {l, r, u, d, i};
+			// test if there's 2x1 hole
+			usize other = usize(-1);
+			if (l == 255 && i / height > 0) { other = i-height; }
+			if (r == 255 && i / height < width-1) { other = i+height; }
+			if (u == 255 && i % height > 0) { other = i-1; }
+			if (d == 255 && i % height < height-1) { other = i+1; }
+			if (other != usize(-1)) {
+				auto other_site = std::find_if(catalysis_sites.begin(), catalysis_sites.end(),
+					[other](const binding_site &b) { return b.i == other; });
+				if (other_site != catalysis_sites.end()) {
+					if (order({b.comp_unk_up(), other_site->comp_unk_up()}) ==
+						std::pair<u8, u8>{0b01'01'01, 0b01'10'01}) {
+						out.is_struct_synthesizer = true;
+						catalysis_sites.erase(other_site);
+						continue;
+					}
+				}
+			}
+			catalysis_sites.push_back(b);
 		}
 	}
 	out.stability = 1.f - expf(-stability_factor*.25f) * .15f; // just feels nice
 	out.stability = std::min(out.stability, 0.99f);
-	// check 
+	// check if it's a correctly sized square for struct proteins
 	if (width == 3 && height == 3) {
 		out.is_small_struct = true;
 		for (i32 i = 0; usize(i) < width; i++) {
@@ -281,6 +310,22 @@ protein_info folder::analyze(const compounds &comp) const {
 		}
 	}
 	out.energy_balance = reaction_energy_change;
+	for (u8 c : out.reaction_input) {
+		if (c == comp.atoms_to_id[g0_comp] || c == comp.atoms_to_id[g1_comp]) {
+			out.is_genome_polymerase = false;
+		}
+		if (c == comp.atoms_to_id[struct_a_comp] || c == comp.atoms_to_id[struct_b_comp]) {
+			out.is_struct_synthesizer = false;
+		}
+	}
+	for (u8 c : out.reaction_output) {
+		if (c == comp.atoms_to_id[g0_comp] || c == comp.atoms_to_id[g1_comp]) {
+			out.is_genome_polymerase = false;
+		}
+		if (c == comp.atoms_to_id[struct_a_comp] || c == comp.atoms_to_id[struct_b_comp]) {
+			out.is_struct_synthesizer = false;
+		}
+	}
 	return out;
 }
 void folder::draw() const {

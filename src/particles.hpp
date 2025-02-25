@@ -118,6 +118,7 @@ public:
 	void kill_struct(u32 gpu_id);
 	void bond(u32 gi_a, u32 gi_b);
 	void unbond(u32 gi_a, u32 gi_b);
+	void set_bond(bool bond, u32 gi, u32 bonded);
 	void inbond(u32 gi_a, u32 gi_b, u32 gi_in);
 };
 

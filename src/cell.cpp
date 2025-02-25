@@ -16,7 +16,8 @@ cell::cell(u32 gi, glm::vec2 p, glm::vec2 v) : s(state::active), gpu_id(gi), pos
 	division_pos(0), next_update(0), next_create(0), health(max_health), membrane_particles(0),
 	big_struct_id(u8(-1)),
 	membrane_bonds({glm::uvec2{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)}}),
-	small_struct(0), small_struct_effective(0), big_struct(0), big_struct_effective(0) { }
+	small_struct(0), small_struct_effective(0), big_struct(0), big_struct_effective(0), membrane_add(0),
+	structs_used(0) { }
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 void cell::update(compounds &comps, bool protein_create) {
@@ -77,6 +78,9 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 		} else if (info.is_genome_repair && info.energy_balance < 0) {
 			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
 				special_action::repair, info.energy_balance};
+		} else if (info.is_struct_synthesizer && info.energy_balance < 0) {
+			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
+				special_action::struct_synthesize, info.energy_balance};
 		} else {
 			e = chem_protein{info.reaction_input, info.reaction_output, K};
 		}
@@ -219,7 +223,7 @@ void cell::update_tick(compounds &comps, protein &prot) {
 						conc -= bit_cost;
 					}
 				};
-				for (; division_pos < genome.size() && spent_energy < energy - .03f; spent_energy += .03f) {
+				for (; division_pos < genome.size() && spent_energy < energy - .003f; spent_energy += .003f) {
 					f32 conc_sum = zero_conc + one_conc;
 					if (conc_sum < bit_cost * 64.f)
 						break;
@@ -255,9 +259,22 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				}
 				} break;
 			case special_action::repair:{
-				const u32 repair = u32(std::max(i32(energy * 100.f), 0));
+				const u32 repair = u32(std::max(i32(energy * 1000.f), 0));
 				health = std::min(health + repair, max_health);
-				spent_energy = f32(repair) * .01f;
+				spent_energy = f32(repair) * .001f;
+				} break;
+			case special_action::struct_synthesize:{
+				if (comps.locked[comps.atoms_to_id[struct_a_comp]]) { return; }
+				if (comps.locked[comps.atoms_to_id[struct_b_comp]]) { return; }
+				const f32 struct_cost = 1.f / 128.f;
+				f32 &conca = comps.at(comps.atoms_to_id[struct_a_comp], gpu_id);
+				f32 &concb = comps.at(comps.atoms_to_id[struct_b_comp], gpu_id);
+				const u32 built = u32(std::max(0,
+					std::min({i32(energy * 100.f), i32(conca / struct_cost), i32(concb / struct_cost)})));
+				conca -= f32(built) * struct_cost;
+				concb -= f32(built) * struct_cost;
+				spent_energy = f32(built) * .01f;
+				membrane_add += built;
 				} break;
 			default: return;
 			}
@@ -333,7 +350,7 @@ f32 cell::reaction_delta(compounds &comps, const protein &prot, f32 cata_effect,
 		return 0.f;
 	}
 	const f32 curr_conc_ratio = out_prod / std::max(inp_prod, 0.0001f);
-	const f32 t = std::clamp(1.f - powf(1.f - .1f * cata_effect * prot.conc, f32(proteins.size())), 0.f, 1.f);
+	const f32 t = std::clamp(1.f - powf(1.f - .003f * cata_effect * prot.conc, f32(proteins.size())), 0.f, 1.f);
 	const f32 next_conc_ratio = std::lerp(curr_conc_ratio, K, t);
 	for (usize i = 0; i < fo.size(); i++) {
 		fo[i] -= fi[i] * next_conc_ratio;
