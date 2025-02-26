@@ -103,7 +103,7 @@ public:
 	~particles();
 	void step_cpu();
 	void tick_cell(bool protein_creation, u32 cell_id);
-	void step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<timestamps> &ts);
+	void step_gpu(vk::CommandBuffer cmd, const rend::timestamps<timestamps> &ts);
 	void imgui();
 	u32 pframe() const;
 	vk::Buffer particle_buff() const;

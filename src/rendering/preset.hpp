@@ -46,8 +46,14 @@ namespace rend::preset {
 			phy_device.select_physical(ctx.vulkan_instance_raii(), win.vulkan_surface());
 			device = phy_device.logical_simple();
 			namer.set_device(*device); namer(*device, "main device");
-			graphics_compute_queue = device.getQueue(phy_device.queue_family_ids[0], 0); namer(*graphics_compute_queue, "main graphics/compute queue");
-			present_queue = device.getQueue(phy_device.queue_family_ids[1], 0); namer(*present_queue, "main present queue");
+			graphics_compute_queue = device.getQueue(phy_device.queue_family_ids[0], 0);
+			present_queue = device.getQueue(phy_device.queue_family_ids[1], 0);
+			if (phy_device.queue_family_ids[0] == phy_device.queue_family_ids[1]) {
+				namer(*graphics_compute_queue, "main graphics/compute/present queue");
+			} else {
+				namer(*graphics_compute_queue, "main graphics/compute queue");
+				namer(*present_queue, "main present queue");
+			}
 			win.set_device(&phy_device.physical_device.handle, &device);
 			win.init_swapchain(true);
 

@@ -18,7 +18,8 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	[](rend::context &ctx) { static_cast<void>(ctx); },
 	[](const rend::window &win, phy_device_m_t &phy_device) {static_cast<void>(win); static_cast<void>(phy_device); }),
 	first_frame(true), quad_vb(nullptr), quad_ib(nullptr), concs_stage(nullptr), concs_isb(nullptr),
-	force_quad(nullptr), chem_quad(nullptr), particle_draw_pll(nullptr), particle_draw_pl(nullptr)  {
+	force_quad(nullptr), chem_quad(nullptr), particle_draw_pll(nullptr), particle_draw_pl(nullptr),
+	multistep_fence(nullptr) {
 	win.set_user_pointer(this);
 	std::vector<vk::DescriptorPoolSize> dpool_sizes = {
 		{vk::DescriptorType::eStorageBuffer, compile_options::frames_in_flight * 128},
@@ -40,10 +41,15 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
 
 	update_cmds = device.allocateCommandBuffers({*command_pool, vk::CommandBufferLevel::ePrimary,
-		compile_options::frames_in_flight});
+		particles::sim_frames});
 	for (usize i = 0; i < particles::sim_frames; i++) {
 		update_semaphores.push_back(device.createSemaphore({}));
+		ctx.set_object_name(*device, *update_semaphores.back(), ("update semaphore #" + std::to_string(i)).c_str());
+	}
+	for (usize i = 0; i < compile_options::frames_in_flight; i++) {
 		update_render_semaphores.push_back(device.createSemaphore({}));
+		ctx.set_object_name(*device, *update_render_semaphores.back(), ("update-render semaphore #" + std::to_string(i)).c_str());
+
 	}
 
 	vk::PushConstantRange push_range{vk::ShaderStageFlagBits::eVertex, 0, sizeof(particle_draw_push)};
@@ -130,6 +136,10 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 	pv.set_rand(*p->comps, 42);
 	last_struct_spawn = u32(-1);
 	set_conc_target = 1.f;
+
+	multistep_fence = device.createFence({});
+	steps_per_frame = 1;
+	curr_sync_semaphore = 0;
 }
 void mikrosim_window::terminate() {
 	concs_stage.unmap();
@@ -194,8 +204,13 @@ void mikrosim_window::loop() {
 			compute_ts.update();
 			render_ts.update();
 			vk::Buffer particle_buff = p->particle_buff();
-			if (running || inp.is_key_down(GLFW_KEY_SEMICOLON)) {
-				advance_sim(rframe);
+			if (running) {
+				for (u32 i = 0; i < steps_per_frame; i++) {
+					bool last = i+1 == steps_per_frame;
+					advance_sim(last, !last);
+				}
+			} else if (inp.is_key_down(GLFW_KEY_SEMICOLON)) {
+				advance_sim(true, false);
 			}
 
 			cmd.reset();
@@ -318,26 +333,37 @@ void mikrosim_window::update() {
 	}
 	if (pos_upd) { update_view(); }
 }
-void mikrosim_window::advance_sim(u32 rframe) {
+void mikrosim_window::advance_sim(bool signal_render_semaphore, bool fence) {
 	u32 pframe = p->pframe();
-	vk::CommandBuffer ucmd = update_cmds[rframe];
+	vk::CommandBuffer ucmd = update_cmds[pframe];
 	ucmd.reset();
 	static_cast<void>(ucmd.begin(vk::CommandBufferBeginInfo{}));
-	p->step_gpu(ucmd, rframe, compute_ts);
+	p->step_gpu(ucmd, compute_ts);
 	compute_ts.end();
 	ucmd.end();
 	u32 npframe = p->pframe();
-	auto signal_semaphores = {*update_semaphores[npframe], *update_render_semaphores[npframe]};
+	auto signal_semaphores = std::vector<vk::Semaphore>{*update_semaphores[npframe]};
+	if (signal_render_semaphore) {
+		if (!first_frame) {
+			render_submit_semaphores.push_back(*update_render_semaphores[curr_sync_semaphore]);
+			render_submit_semaphore_stages.push_back(vk::PipelineStageFlagBits::eComputeShader);
+		}
+		curr_sync_semaphore = (curr_sync_semaphore + 1) % compile_options::frames_in_flight;
+		signal_semaphores.push_back(*update_render_semaphores[curr_sync_semaphore]);
+	}
+	vk::Fence f = fence ? *multistep_fence : nullptr;
 	if (first_frame) { [[unlikely]];
 		first_frame = false;
-		graphics_compute_queue.submit({{{}, {}, ucmd, signal_semaphores}});
+		graphics_compute_queue.submit({{{}, {}, ucmd, signal_semaphores}}, f);
 	} else {
 		vk::PipelineStageFlags psf = vk::PipelineStageFlagBits::eComputeShader;
-		graphics_compute_queue.submit({{*update_semaphores[pframe], psf, ucmd, signal_semaphores}});
-		render_submit_semaphores.push_back(*update_render_semaphores[pframe]);
-		render_submit_semaphore_stages.push_back(vk::PipelineStageFlagBits::eComputeShader);
+		graphics_compute_queue.submit({{*update_semaphores[pframe], psf, ucmd, signal_semaphores}}, f);
 	}
 	p->step_cpu();
+	if (fence) {
+		static_cast<void>(device.waitForFences(*multistep_fence, vk::True, std::numeric_limits<u64>::max()));
+		device.resetFences(*multistep_fence);
+	}
 }
 void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_mesh,
 	const rend::simple_mesh &crosshair_mesh, vk::Buffer particle_buff) {
@@ -392,6 +418,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 		ImGui::SameLine();
 		if (ImGui::Button("start/stop")) { running = !running; }
 		// c++ even requires 2's complement now so it should be fine to type alias (u32-i32)
+		ImGui::SliderInt("steps per frame", reinterpret_cast<i32 *>(&steps_per_frame), 1, 20);
 		ImGui::SliderInt("shown compund", reinterpret_cast<i32 *>(&disp_compound), 0, compounds::count-1);
 		if (ImGui::BeginTable("##compound_info", 2)) {
 			const auto &info = p->comps->infos[disp_compound];

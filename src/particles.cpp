@@ -281,8 +281,7 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 		}
 	}
 }
-void particles::step_gpu(vk::CommandBuffer cmd, u32 frame, const rend::timestamps<timestamps> &ts) {
-	static_cast<void>(frame);
+void particles::step_gpu(vk::CommandBuffer cmd, const rend::timestamps<timestamps> &ts) {
 	update_push upush{{0,0,0,0}, compile_options::particle_count, global_density * .1f,
 		stiffness * .001f, viscosity * .01f};
 	for (usize i = 0; i < 4; i++) {
