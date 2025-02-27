@@ -62,13 +62,16 @@ struct protein_info {
 	bool is_positive_factor;
 	bool is_small_struct;
 	bool is_big_struct;
+	bool is_motor;
 	i32 energy_balance;
 	f32 stability;
+	u32 end_marker;
 };
 
 class folder {
 	usize width, height;
 	std::vector<std::vector<u8>> placed;
+	u32 end_marker;
 
 	std::vector<u8> &at(i32 x, i32 y);
 	const std::vector<u8> &at(i32 x, i32 y) const;
@@ -90,10 +93,11 @@ struct transcription_factor {
 	bool positive;
 	f32 curr_effect;
 };
-enum class special_action { division, repair, struct_synthesize };
+enum class special_action { division, repair, struct_synthesize, move_ccw, move_cw };
 struct special_chem_protein : public chem_protein {
 	special_action act;
 	i32 energy_balance;
+	f32 movement;
 };
 struct struct_protein {
 	bool big;
@@ -110,5 +114,6 @@ struct protein {
 	f32 conc;
 	f32 stability;
 	bool direct_transcription;
+	u32 location;
 };
 

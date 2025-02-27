@@ -14,7 +14,7 @@ struct particle_id {
 	uint id;
 	vec4 concentration;
 };
-const float mix_factors[] = float[4](0,1,1,0);
+const float mix_factors[] = float[6](0,1,1,0,1,1);
 const uint CELLS_X = ${CELLS_X};
 const uint CELLS_Y = ${CELLS_Y};
 const uint CELLP_START = ${PARTICLE_COUNT} - ${STRUCT_PARTICLE_COUNT} - ${MEMBRANE_PARTICLE_COUNT} - ${CELL_PARTICLE_COUNT};

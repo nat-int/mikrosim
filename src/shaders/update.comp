@@ -40,6 +40,9 @@ layout(std140, set=0, binding=4) readonly buffer cell_t {
 layout(std140, set=0, binding=5) writeonly buffer concentrations_t {
 	vec4 data[];
 } concentrations;
+layout(std140, set=0, binding=6) readonly buffer forces_t {
+	vec2 data[];
+} forces;
 
 const vec2 MAX_SPEED = vec2(0.5, 0.5);
 
@@ -164,10 +167,12 @@ void main() {
 				if (particles.data[j].type == 5) { vel += bond(pos, ov, j, 1., .002); }
 			}
 		} else if (type == 4) {
-			uint i = CELLP_START + (particle_id - MEMBRANEP_START)/4;
+			uint celli = (particle_id - MEMBRANEP_START)/4;
+			uint i = CELLP_START + celli;
 			if (particles.data[i].type == 2) {
 				vel += bond(pos, ov, i, 1.5, .002);
 			}
+			vel += forces.data[celli];
 		} else if (type == 5) {
 			uint i = CELLP_START + (particle_id - MEMBRANEP_START)/4;
 			if (particles.data[i].type == 2) {

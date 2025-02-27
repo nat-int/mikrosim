@@ -17,11 +17,14 @@ cell::cell(u32 gi, glm::vec2 p, glm::vec2 v) : s(state::active), gpu_id(gi), pos
 	big_struct_id(u8(-1)),
 	membrane_bonds({glm::uvec2{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)}}),
 	small_struct(0), small_struct_effective(0), big_struct(0), big_struct_effective(0), membrane_add(0),
-	structs_used(0) { }
+	flagellum_add(0), membrane_structs(0), structs_used(0), big_struct_force(0.f, 0.f),
+	net_movement(0.f) { }
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 void cell::update(compounds &comps, bool protein_create) {
 	health--;
+	if (membrane_structs < 4 && health > 0)
+		health--;
 	if (proteins.empty()) return;
 	if (protein_create) {
 		create_tick(comps, proteins[next_create]);
@@ -29,6 +32,16 @@ void cell::update(compounds &comps, bool protein_create) {
 	} else {
 		update_tick(comps, proteins[next_update]);
 		next_update = (next_update + 1) % proteins.size();
+	}
+	if (big_struct_id != u8(-1)) {
+		glm::vec2 r = big_struct_pos - pos;
+		if (glm::dot(r, r) < 5.f) {
+			big_struct_force = net_movement * glm::normalize(glm::vec2(-r.y, r.x));
+		} else {
+			big_struct_force = glm::vec2(0.f, 0.f);
+		}
+	} else {
+		big_struct_force = glm::vec2(0.f, 0.f);
 	}
 }
 bool cell::add_protein(const compounds &comps, usize s, bool direct_transcription) {
@@ -55,6 +68,7 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 	folder f;
 	f.place(bls);
 	const auto info = f.analyze(comps);
+	u32 loc = info.end_marker;
 	protein::effect_t e;
 	if (!info.genome_binder.empty()) {
 		std::vector<usize> bind_points;
@@ -63,6 +77,7 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 				bind_points.push_back(i);
 		}
 		e = transcription_factor{bind_points, info.is_positive_factor, 0.f};
+		loc = 0;
 	} else if (info.is_small_struct) {
 		e = struct_protein{false, 0};
 	} else if (info.is_big_struct) {
@@ -74,19 +89,26 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 		f32 K = glm::exp(f32(-info.energy_balance) * c); // based on K = exp(-dG / RT)
 		if (info.is_genome_polymerase && info.energy_balance < 0) {
 			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
-				special_action::division, info.energy_balance};
+				special_action::division, info.energy_balance, 0.f};
+			loc = 0;
 		} else if (info.is_genome_repair && info.energy_balance < 0) {
 			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
-				special_action::repair, info.energy_balance};
+				special_action::repair, info.energy_balance, 0.f};
+			loc = 0;
 		} else if (info.is_struct_synthesizer && info.energy_balance < 0) {
 			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
-				special_action::struct_synthesize, info.energy_balance};
+				special_action::struct_synthesize, info.energy_balance, 0.f};
+		} else if (info.is_motor && info.energy_balance < 0) {
+			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
+				info.end_marker ? special_action::move_cw : special_action::move_ccw,
+				info.energy_balance, 0.f};
+			loc = 1;
 		} else {
 			e = chem_protein{info.reaction_input, info.reaction_output, K};
 		}
 	}
 	proteins.push_back({info.catalyzers, e, s, blocks_boundary, cost, 0.f, info.stability,
-		direct_transcription});
+		direct_transcription, loc});
 	return true;
 }
 bool cell::add_protein_rec(const compounds &comps, usize s, bool direct_transcription, u8 max_depth) {
@@ -120,8 +142,20 @@ void cell::analyze(const compounds &comps) {
 u8 cell::genome_quad(usize i) const {
 	return u8(u8(genome[i]) | u8(genome[i+1]) << 1 | u8(genome[i+2]) << 2 | u8(genome[i+3]) << 3);
 }
+u32 cell::id(bool in_big_struct) const {
+	if (in_big_struct) {
+		if (big_struct_id == u8(-1))
+			return u32(-1);
+		return compile_options::membrane_particle_start +
+			4*(gpu_id - compile_options::env_particle_count) + big_struct_id;
+	}
+	return gpu_id;
+}
 void cell::create_tick(compounds &comps, protein &prot) {
 	// TODO: creating proteins shouldn't be free (in energy)
+	u32 at = id(prot.location);
+	if (at == u32(-1))
+		return;
 	f32 denat = (1.f - powf(prot.stability, f32(proteins.size()))) * prot.conc;
 	f32 create_pos = (prot.direct_transcription ? .5f : -bound_factors[prot.genome_start]);
 	for (usize i = prot.genome_start + 1; i < prot.genome_end; i++) {
@@ -130,7 +164,7 @@ void cell::create_tick(compounds &comps, protein &prot) {
 	f32 max_create = 1.f;
 	for (usize i = 0; i < block_count; i++) {
 		if (prot.cost[i] > 0.00001f) {
-			max_create = std::min(max_create, comps.at(comps.atoms_to_id[block_compounds[i]], gpu_id) / prot.cost[i]);
+			max_create = std::min(max_create, comps.at(comps.atoms_to_id[block_compounds[i]], at) / prot.cost[i]);
 		}
 	}
 	f32 create = std::clamp(1.f - powf(1.f - create_pos, f32(proteins.size())),
@@ -138,7 +172,7 @@ void cell::create_tick(compounds &comps, protein &prot) {
 	f32 delta = create - denat;
 	prot.conc += delta;
 	for (usize i = 0; i < block_count; i++) { // "denaturated" "proteins" "decompose" instantly :)
-		comps.at(comps.atoms_to_id[block_compounds[i]], gpu_id) -= delta * prot.cost[i];
+		comps.at(comps.atoms_to_id[block_compounds[i]], at) -= delta * prot.cost[i];
 	}
 	if (std::holds_alternative<struct_protein>(prot.effect)) {
 		auto &sp = std::get<struct_protein>(prot.effect);
@@ -155,10 +189,13 @@ void cell::create_tick(compounds &comps, protein &prot) {
 	}
 }
 void cell::update_tick(compounds &comps, protein &prot) {
+	u32 at = id(prot.location);
+	if (at == u32(-1))
+		return;
 	f32 cata_effect = 1.f;
 	f32 req_cata_worst = 0.f;
 	for (const auto &c : prot.catalyzers) {
-		f32 conc = comps.at(c.compound, gpu_id);
+		f32 conc = comps.at(c.compound, at);
 		if (c.effect > 0) {
 			cata_effect += conc * conc - 1 + c.effect;
 		} else {
@@ -188,25 +225,32 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				bound_factors[i] += delta;
 			}
 		},
-		[this, &comps, &prot, cata_effect](chem_protein &cp) {
+		[this, at, &comps, &prot, cata_effect](chem_protein &cp) {
 			for (u8 c : cp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : cp.outputs) { if (comps.locked[c]) return; }
-			f32 delta = reaction_delta(comps, prot, cata_effect, cp.K,
-				cp.inputs, cp.outputs);
+			f32 delta = reaction_delta(comps, at, prot, cata_effect, cp.K, cp.inputs, cp.outputs);
 			for (u8 c : cp.inputs) {
-				comps.at(c, gpu_id) -= delta;
+				comps.at(c, at) -= delta;
 			}
 			for (u8 c : cp.outputs) {
-				comps.at(c, gpu_id) += delta;
+				comps.at(c, at) += delta;
 			}
 		},
-		[this, &comps, &prot, cata_effect](special_chem_protein &scp) {
+		[this, at, &comps, &prot, cata_effect](special_chem_protein &scp) {
 			for (u8 c : scp.inputs) { if (comps.locked[c]) return; }
 			for (u8 c : scp.outputs) { if (comps.locked[c]) return; }
-			f32 delta = reaction_delta(comps, prot, cata_effect, scp.K, scp.inputs, scp.outputs);
-			if (delta < 0.001f) return;
+			f32 delta = reaction_delta(comps, at, prot, cata_effect, scp.K, scp.inputs, scp.outputs);
+			if (delta < 0.001f) {
+				net_movement -= scp.movement;
+				scp.movement = 0.f;
+				return;
+			}
 			f32 energy = delta * f32(-scp.energy_balance);
-			if (energy < 0.001f) return;
+			if (energy < 0.001f) {
+				net_movement -= scp.movement;
+				scp.movement = 0.f;
+				return;
+			}
 			f32 spent_energy = 0.f;
 			switch (scp.act) {
 			case special_action::division:{
@@ -214,8 +258,8 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				if (comps.locked[comps.atoms_to_id[g1_comp]]) { return; }
 				static constexpr f32 bit_cost = 1.f / 4096.f;
 				static constexpr f32 incorrect_unbind_chance = 0.9995f;
-				f32 &zero_conc = comps.at(comps.atoms_to_id[g0_comp], gpu_id);
-				f32 &one_conc = comps.at(comps.atoms_to_id[g1_comp], gpu_id);
+				f32 &zero_conc = comps.at(comps.atoms_to_id[g0_comp], at);
+				f32 &one_conc = comps.at(comps.atoms_to_id[g1_comp], at);
 				const auto push_bit = [this, &zero_conc, &one_conc](bool bit) {
 					f32 &conc = bit ? one_conc : zero_conc;
 					if (conc > bit_cost) {
@@ -267,23 +311,37 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				if (comps.locked[comps.atoms_to_id[struct_a_comp]]) { return; }
 				if (comps.locked[comps.atoms_to_id[struct_b_comp]]) { return; }
 				const f32 struct_cost = 1.f / 128.f;
-				f32 &conca = comps.at(comps.atoms_to_id[struct_a_comp], gpu_id);
-				f32 &concb = comps.at(comps.atoms_to_id[struct_b_comp], gpu_id);
+				f32 &conca = comps.at(comps.atoms_to_id[struct_a_comp], at);
+				f32 &concb = comps.at(comps.atoms_to_id[struct_b_comp], at);
 				const u32 built = u32(std::max(0,
 					std::min({i32(energy * 100.f), i32(conca / struct_cost), i32(concb / struct_cost)})));
 				conca -= f32(built) * struct_cost;
 				concb -= f32(built) * struct_cost;
 				spent_energy = f32(built) * .01f;
-				membrane_add += built;
+				(prot.location ? flagellum_add : membrane_add) += built;
 				} break;
+			case special_action::move_cw:{
+				spent_energy = std::min(energy, 0.5f);
+				f32 nm = spent_energy * 0.05f;
+				net_movement += nm - scp.movement;
+				scp.movement = nm;
+				break;
+			}
+			case special_action::move_ccw:{
+				spent_energy = std::min(energy, 0.5f);
+				f32 nm = -spent_energy * 0.05f;
+				net_movement += nm - scp.movement;
+				scp.movement = nm;
+				break;
+			}
 			default: return;
 			}
 			delta = delta * spent_energy / energy;
 			for (u8 c : scp.inputs) {
-				comps.at(c, gpu_id) -= delta;
+				comps.at(c, at) -= delta;
 			}
 			for (u8 c : scp.outputs) {
-				comps.at(c, gpu_id) += delta;
+				comps.at(c, at) += delta;
 			}
 		},
 		[](struct_protein &) { }
@@ -308,7 +366,7 @@ template<>
 f32 select_root<std::pair<f32, f32>>(const std::pair<f32, f32> &root_list) {
 	return select_root(std::array<f32, 2>{root_list.first, root_list.second});
 }
-f32 cell::reaction_delta(compounds &comps, const protein &prot, f32 cata_effect, f32 K,
+f32 cell::reaction_delta(compounds &comps, u32 at, const protein &prot, f32 cata_effect, f32 K,
 	const std::vector<u8> &inp, const std::vector<u8> &out) const {
 	if (inp.empty()) return 0.f;
 	// PROD c_p / PROD c_e should approach K, so
@@ -324,7 +382,7 @@ f32 cell::reaction_delta(compounds &comps, const protein &prot, f32 cata_effect,
 	fo[0] = 1.f;
 	f32 max_inp_take = 1.f;
 	for (u8 c : inp) {
-		f32 conc = comps.at(c, gpu_id);
+		f32 conc = comps.at(c, at);
 		usize count = 0;
 		for (u8 c2 : inp) { if (c == c2) count++; }
 		max_inp_take = std::min(conc / f32(count), max_inp_take);
@@ -336,7 +394,7 @@ f32 cell::reaction_delta(compounds &comps, const protein &prot, f32 cata_effect,
 	}
 	f32 max_out_take = 1.f;
 	for (u8 c : out) {
-		f32 conc = comps.at(c, gpu_id);
+		f32 conc = comps.at(c, at);
 		usize count = 0;
 		for (u8 c2 : out) { if (c == c2) count++; }
 		max_out_take = std::min(conc / f32(count), max_out_take);
@@ -387,7 +445,7 @@ void cell::test() {
 			in.push_back(u8(i));
 			out.push_back(u8(i + n));
 		}
-		proteins.push_back(protein{{}, chem_protein{in, out, 1.f}, 0, 0, {Z14}, 1.f, 0.05f, false});
+		proteins.push_back(protein{{}, chem_protein{in, out, 1.f}, 0, 0, {Z14}, 1.f, 0.05f, false, 0});
 		for (usize i = 0; i < 100; i++) {
 			auto &p = proteins[0];
 			p.catalyzers.clear();

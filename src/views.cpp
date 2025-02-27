@@ -479,6 +479,8 @@ void cell_view::draw(const input::input_handler &inp, const compounds &comps, pr
 						case special_action::division: ImGui::Text("genome polymerase"); break;
 						case special_action::repair: ImGui::Text("genome repair"); break;
 						case special_action::struct_synthesize: ImGui::Text("struct synthesizer"); break;
+						case special_action::move_cw: ImGui::Text("cw motor"); break;
+						case special_action::move_ccw: ImGui::Text("ccw motor"); break;
 						default: ImGui::Text("unknown special action!"); break;
 						}
 					},

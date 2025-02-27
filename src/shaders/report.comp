@@ -12,6 +12,8 @@ layout(std140, set=0, binding=0) readonly buffer particles_t {
 struct particle_report {
 	vec2 pos;
 	vec2 vel;
+	vec2 big_struct_pos;
+	vec2 _;
 };
 layout(std140, set=0, binding=1) writeonly buffer reports_t {
 	particle_report data[];
@@ -22,9 +24,13 @@ void main() {
 	uint particle_id = ri + push.off;
 	if (particle_id < push.pcount) {
 		uint type = particles.data[particle_id].type;
-		if (type != 2) { return; }
-		reports.data[ri].pos = particles.data[particle_id].pos;
-		reports.data[ri].vel = particles.data[particle_id].vel;
+		if (type == 2) {
+			reports.data[ri].pos = particles.data[particle_id].pos;
+			reports.data[ri].vel = particles.data[particle_id].vel;
+		} else if (type == 5) {
+			uint ci = (particle_id - MEMBRANEP_START) / 4;
+			reports.data[ci].big_struct_pos = particles.data[particle_id].pos;
+		}
 	}
 }
 

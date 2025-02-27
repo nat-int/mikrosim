@@ -20,12 +20,20 @@ void folder::replace(const std::vector<block> &chain) {
 	place(chain);
 }
 void folder::place(const std::vector<block> &chain) {
+	end_marker = 0;
+	auto end = chain.end();
+	if (chain.size() > 2 && chain[chain.size()-2].atoms == blocks[3].atoms &&
+		chain.back().atoms == blocks[0].atoms) {
+		end_marker = 1;
+		end -= 2;
+	}
 	glm::ivec2 min = {0,0};
 	glm::ivec2 max = {0,0};
 	glm::ivec2 pos = {0,0};
 	u8 dir = 0;
 	static constexpr glm::ivec2 dir_shifts[] = { {1,0}, {0,1}, {-1,0}, {0,-1} };
-	for (const block &b : chain) {
+	for (auto i = chain.begin(); i != end; i++) {
+		const block &b = *i;
 		min = glm::min(min, pos);
 		max = glm::max(max, pos);
 		dir = u8((dir + 4 + b.shape) % 4);
@@ -37,7 +45,8 @@ void folder::place(const std::vector<block> &chain) {
 	height = usize(max.y+1);
 	placed.resize(width * height);
 	dir = 0;
-	for (const block &b : chain) {
+	for (auto i = chain.begin(); i != end; i++) {
+		const block &b = *i;
 		at(pos.x, pos.y).push_back(std::rotr(b.atoms, dir*2));
 		dir = u8((dir + 4 + b.shape) % 4);
 		pos += dir_shifts[dir];
@@ -76,10 +85,12 @@ static std::pair<u8, u8> order(std::pair<u8, u8> x) {
 }
 protein_info folder::analyze(const compounds &comp) const {
 	protein_info out{};
+	out.end_marker = end_marker;
 	f32 stability_factor = 0.f;
 	// find interesting places in the placed protein
 	std::vector<binding_site> active_sites;
 	std::vector<binding_site> catalysis_sites;
+	out.is_motor = width == height && width > 4;
 	for (usize i = 0; i < placed.size(); i++) {
 		if (!placed[i].empty()) {
 			if (placed[i].size() > 1) {
@@ -91,6 +102,9 @@ protein_info folder::analyze(const compounds &comp) const {
 				}
 			}
 			continue;
+		}
+		if (out.is_motor && (placed[i].empty() != at(i32(i % height), i32(width - 1 - i / height)).empty())) {
+			out.is_motor = false;
 		}
 		u8 l = 255, r = 255, u = 255, d = 255;
 		if (i / height > 0 && placed[i-height].size() == 1) { l = placed[i-height][0] >> 4 & 3; }
@@ -310,6 +324,7 @@ protein_info folder::analyze(const compounds &comp) const {
 		}
 	}
 	out.energy_balance = reaction_energy_change;
+	if (out.is_big_struct) out.is_motor = false;
 	for (u8 c : out.reaction_input) {
 		if (c == comp.atoms_to_id[g0_comp] || c == comp.atoms_to_id[g1_comp]) {
 			out.is_genome_polymerase = false;

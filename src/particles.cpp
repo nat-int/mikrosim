@@ -33,8 +33,8 @@ void particle::set(glm::vec2 _pos, glm::vec2 _vel, u32 _type) {
 
 particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	const rend::buffer_handler &bh, const vk::raii::DescriptorPool &dpool) : proc(device, bh),
-	cell_stage(nullptr), reports(nullptr), concs_upload(nullptr), concs_download(nullptr),
-	blocks_uniform(bh.get_alloc()) {
+	cell_stage(nullptr), forces_stage(nullptr), reports(nullptr), concs_upload(nullptr),
+	concs_download(nullptr), blocks_uniform(bh.get_alloc()) {
 	std::vector<particle> particle_data(compile_options::particle_count);
 	for (u32 i = 0; i < compile_options::particle_count; i++) {
 		particle_data[i].pos = randv() * glm::fvec2{compile_options::cells_x, compile_options::cells_y};
@@ -52,6 +52,8 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 		vk::BufferUsageFlagBits::eTransferSrc);
 	proc.add_buffer(compile_options::particle_count * sizeof(glm::vec4),
 		vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst);
+	proc.add_buffer(compile_options::cell_particle_count * sizeof(glm::vec4),
+		vk::BufferUsageFlagBits::eTransferDst);
 	for (u32 i = 0; i < sim_frames; i++) {
 		ctx.set_object_name(device, *proc.main_buffer[i], ("particle main buffer #"+std::to_string(i)).c_str());
 	}
@@ -60,10 +62,14 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 	ctx.set_object_name(*device, *proc.proc_buffers[cell_buff-1], "particle cell buffer");
 	ctx.set_object_name(*device, *proc.proc_buffers[report_buff-1], "particle report buffer");
 	ctx.set_object_name(*device, *proc.proc_buffers[concs_buff-1], "particle gpu concentrations buffer");
+	ctx.set_object_name(*device, *proc.proc_buffers[forces_buff-1], "particle gpu forces buffer");
 
 	cell_stage = bh.make_staging_buffer(sizeof(particle)*compile_options::no_env_particle_count*sim_frames,
 		vk::BufferUsageFlagBits::eTransferSrc);
 	cell_stage_map = static_cast<particle *>(cell_stage.map());
+	forces_stage = bh.make_staging_buffer(sizeof(glm::vec4)*compile_options::cell_particle_count*
+		sim_frames, vk::BufferUsageFlagBits::eTransferSrc);
+	forces_stage_map = static_cast<glm::vec4 *>(forces_stage.map());
 	reports = bh.make_staging_buffer(sizeof(particle_report)*compile_options::cell_particle_count,
 		vk::BufferUsageFlagBits::eTransferDst);
 	reports_map = static_cast<particle_report *>(reports.map());
@@ -74,6 +80,7 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 		sim_frames, vk::BufferUsageFlagBits::eTransferDst);
 	concs_download_map = static_cast<glm::vec4 *>(concs_download.map());
 	ctx.set_object_name(*device, *cell_stage, "cell staging buffer");
+	ctx.set_object_name(*device, *forces_stage, "forces staging buffer");
 	ctx.set_object_name(*device, *reports, "cell reports (staging) buffer");
 	ctx.set_object_name(*device, *concs_upload, "concentrations staging buffer");
 	ctx.set_object_name(*device, *concs_download, "concentrations unstaging buffer");
@@ -94,14 +101,15 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 			{vk::DescriptorType::eStorageBuffer, 1 /*next*/},
 			{vk::DescriptorType::eStorageBuffer, 1 /*counts*/},
 			{vk::DescriptorType::eStorageBuffer, 1 /*cell*/},
-			{vk::DescriptorType::eStorageBuffer, 1 /*concs*/}});
+			{vk::DescriptorType::eStorageBuffer, 1 /*concs*/},
+			{vk::DescriptorType::eStorageBuffer, 1 /*forces*/}});
 	{
 		std::vector<vk::DescriptorSetLayout> dsls(sim_frames, proc.pipelines.back().dsl);
 		proc.pipelines.back().ds = device.allocateDescriptorSets({dpool, dsls});
 		std::vector<vk::WriteDescriptorSet> writes;
-		writes.reserve(sim_frames*6);
+		writes.reserve(sim_frames*7);
 		std::vector<vk::DescriptorBufferInfo> dbis;
-		dbis.reserve(sim_frames*6);
+		dbis.reserve(sim_frames*7);
 		for (u32 f = 0; f < sim_frames; f++) {
 			dbis.push_back(blocks_uniform.descriptor_info());
 			writes.push_back({proc.pipelines.back().ds[f], 0, 0,
@@ -120,6 +128,9 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 				vk::DescriptorType::eStorageBuffer, {}, dbis.back(), {}});
 			dbis.push_back({*proc.proc_buffers[concs_buff-1], 0, proc.buffer_sizes[concs_buff]});
 			writes.push_back({proc.pipelines.back().ds[f], 5, 0,
+				vk::DescriptorType::eStorageBuffer, {}, dbis.back(), {}});
+			dbis.push_back({*proc.proc_buffers[forces_buff-1], 0, proc.buffer_sizes[forces_buff]});
+			writes.push_back({proc.pipelines.back().ds[f], 6, 0,
 				vk::DescriptorType::eStorageBuffer, {}, dbis.back(), {}});
 		}
 		device.updateDescriptorSets(writes, {});
@@ -165,6 +176,7 @@ particles::particles(const rend::context &ctx, const vk::raii::Device &device,
 }
 particles::~particles() {
 	cell_stage.unmap();
+	forces_stage.unmap();
 	reports.unmap();
 	concs_upload.unmap();
 	concs_download.unmap();
@@ -189,6 +201,8 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 	if (c.s != cell::state::none) {
 		c.pos = reports_map[cell_id].pos;
 		c.vel = reports_map[cell_id].vel;
+		if (c.big_struct_id != u8(-1))
+			c.big_struct_pos = reports_map[cell_id].spos;
 		c.update(*comps, protein_creation);
 		if (c.health < 1) {
 			kill_cell(c.gpu_id);
@@ -207,7 +221,8 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 			} else if (c.big_struct >= c.big_struct_effective+big_struct_cost &&
 				c.big_struct_id == u8(-1) && c.membrane_particles != 0xf) {
 				c.big_struct_effective += big_struct_cost;
-				c.big_struct_id = u8(spawn_membrane(c.pos + randuv(), c.vel, cell_id, 4));
+				c.big_struct_pos = c.pos + randuv();
+				c.big_struct_id = u8(spawn_membrane(c.big_struct_pos, c.vel, cell_id, 4));
 				c.membrane_bonds[c.big_struct_id] = {u32(-1), u32(-1)};
 			}
 			if (c.small_struct < c.small_struct_effective) {
@@ -244,7 +259,7 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 				if (c.structs_used >= 8) {
 					continue;
 				}
-				glm::vec2 padd = std::popcount(smp) > 2 ? randv() : (randv() * .1f);
+				glm::vec2 padd = std::popcount(smp) > 2 ? randuv() : (randuv() * .1f);
 				u32 isi = u32(spawn_struct(c.pos + padd, c.vel));
 				u32 i = compile_options::struct_particle_start + isi;
 				if (std::popcount(smp) > 2) {
@@ -265,6 +280,26 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 					structs[isi].bond_b = membrane_ids + j;
 					c.membrane_bonds[j].x = i;
 				}
+				c.membrane_structs++;
+				c.structs_used++;
+			}
+			while (c.flagellum_add >= 100 && c.big_struct_id != u8(-1)) {
+				c.flagellum_add -= 100;
+				if (c.structs_used >= 8) {
+					continue;
+				}
+				u32 bi = membrane_ids + c.big_struct_id;
+				u32 isi = u32(spawn_struct(c.big_struct_pos + randuv() * .2f, c.vel));
+				u32 i = compile_options::struct_particle_start + isi;
+				u32 prevb = c.membrane_bonds[c.big_struct_id].x;
+				if (prevb != u32(-1)) {
+					bond(prevb, i);
+					set_bond(true, prevb, i);
+					structs[isi].bond_a = prevb;
+				}
+				bond(i, bi);
+				structs[isi].bond_b = bi;
+				c.membrane_bonds[c.big_struct_id].x = i;
 				c.structs_used++;
 			}
 		}
@@ -318,10 +353,17 @@ void particles::step_gpu(vk::CommandBuffer cmd, const rend::timestamps<timestamp
 		}
 	}
 	next_mix_concs = (next_mix_concs + 4) % compounds::count;
+	for (u32 i = 0; i < compile_options::cell_particle_count; i++) {
+		forces_stage_map[p.frame() * compile_options::cell_particle_count + i] =
+			glm::vec4(cells[i].big_struct_force, 0.f, 0.f);
+	}
 	glm::vec3 pkernel{(compile_options::particle_count+63)/64, 1, 1};
 	if (!curr_staged.empty()) {
 		cmd.copyBuffer(*cell_stage, *p.mbuff(), curr_staged);
 	}
+	cmd.copyBuffer(*forces_stage, *p.pbuff(forces_buff),
+		{{sizeof(glm::vec4) * compile_options::cell_particle_count * p.frame(), 0,
+		sizeof(glm::vec4) * compile_options::cell_particle_count}});
 	cmd.copyBuffer(*concs_upload, *p.pbuff(concs_buff),
 		{{sizeof(glm::vec4) * compile_options::particle_count * p.frame(), 0,
 		sizeof(glm::vec4) * compile_options::particle_count}});
@@ -331,13 +373,14 @@ void particles::step_gpu(vk::CommandBuffer cmd, const rend::timestamps<timestamp
 		if (!curr_staged.empty()) {
 			p.barrier_main_buffer(b, rend::barrier::trans_w, rend::barrier::shader_r);
 		}
-		p.barrier_proc_buffers(b, rend::barrier::trans_w, rend::barrier::shader_r, {concs_buff});
+		p.barrier_proc_buffers(b, rend::barrier::trans_w, rend::barrier::shader_r, {forces_buff, concs_buff});
 	});
 	curr_staged.clear();
 	p.pl(report_pl).bind(cmd);
 	p.pl(report_pl).bind_ds(cmd, {*p.pl(report_pl).ds[p.frame(0)]});
 	p.push_dispatch(report_pl, report_push{compile_options::env_particle_count,
-		compile_options::particle_count}, {(compile_options::cell_particle_count+63)/64, 1, 1});
+		compile_options::struct_particle_start}, {(compile_options::cell_particle_count+
+			compile_options::membrane_particle_count+63)/64, 1, 1});
 	rend::barrier::compute_transfer(cmd, [&p](rend::barrier &b) {
 		p.barrier_proc_buffers(b, rend::barrier::shader_w, rend::barrier::trans_r, {report_buff});
 	});

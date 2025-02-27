@@ -21,6 +21,7 @@ struct particle {
 struct particle_report {
 	alignas(8) glm::vec2 pos;
 	alignas(8) glm::vec2 vel;
+	alignas(16) glm::vec2 spos;
 };
 
 struct chem_block {
@@ -60,6 +61,7 @@ private:
 	constexpr static u32 cell_buff = 3;
 	constexpr static u32 report_buff = 4;
 	constexpr static u32 concs_buff = 5;
+	constexpr static u32 forces_buff = 6;
 
 	constexpr static u32 count_pl = 0;
 	constexpr static u32 upsweep_pl = 1;
@@ -72,6 +74,8 @@ private:
 	rend::basic_compute_process<sim_frames> proc;
 	vma::buffer cell_stage;
 	particle *cell_stage_map;
+	vma::buffer forces_stage;
+	glm::vec4 *forces_stage_map;
 	std::vector<vk::BufferCopy> curr_staged;
 	u32 next_cell_stage;
 	u32 next_bond_stage;
