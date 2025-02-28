@@ -40,6 +40,7 @@ void cell::update(compounds &comps, bool protein_create) {
 		} else {
 			big_struct_force = glm::vec2(0.f, 0.f);
 		}
+		net_movement *= .999f;
 	} else {
 		big_struct_force = glm::vec2(0.f, 0.f);
 	}
@@ -322,14 +323,14 @@ void cell::update_tick(compounds &comps, protein &prot) {
 				} break;
 			case special_action::move_cw:{
 				spent_energy = std::min(energy, 0.5f);
-				f32 nm = spent_energy * 0.05f;
+				f32 nm = spent_energy * 0.01f;
 				net_movement += nm - scp.movement;
 				scp.movement = nm;
 				break;
 			}
 			case special_action::move_ccw:{
 				spent_energy = std::min(energy, 0.5f);
-				f32 nm = -spent_energy * 0.05f;
+				f32 nm = -spent_energy * 0.01f;
 				net_movement += nm - scp.movement;
 				scp.movement = nm;
 				break;

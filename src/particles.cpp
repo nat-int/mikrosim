@@ -226,8 +226,10 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 				c.membrane_bonds[c.big_struct_id] = {u32(-1), u32(-1)};
 			}
 			if (c.small_struct < c.small_struct_effective) {
-				kill_membrane(membrane_ids + u32(std::countr_zero(smp)));
+				u32 mi = u32(std::countr_zero(smp));
+				kill_membrane(membrane_ids + mi);
 				c.small_struct_effective -= small_struct_cost;
+				c.membrane_structs = 0;
 			} else if (c.small_struct >= c.small_struct_effective+small_struct_cost &&
 				c.membrane_particles != 0xf) {
 				c.small_struct_effective += small_struct_cost;
@@ -235,15 +237,11 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 				c.membrane_bonds[gmi - membrane_ids] = {u32(-1), u32(-1)};
 				if (smp != 0) {
 					u32 o = membrane_ids + u32(std::countr_zero(smp));
-					glm::uvec2 ob = c.membrane_bonds[o - membrane_ids];
-					if (ob.x < compile_options::struct_particle_start) {
-						bond(ob.x, gmi);
-						c.membrane_bonds[(ob.x - compile_options::membrane_particle_start) & 3].y = gmi;
-						c.membrane_bonds[gmi - membrane_ids].x = ob.x;
-					} else if (ob.x < compile_options::particle_count) {
-						bond(ob.x, gmi);
-						structs[ob.x - compile_options::struct_particle_start].bond_b = gmi;
-						c.membrane_bonds[gmi - membrane_ids].x = ob.x;
+					u32 prevb = c.membrane_bonds[o - membrane_ids].x;
+					if (prevb != u32(-1)) {
+						bond(prevb, gmi);
+						set_bond(true, prevb, gmi);
+						c.membrane_bonds[gmi - membrane_ids].x = prevb;
 					}
 					bond(gmi, o);
 					c.membrane_bonds[gmi - membrane_ids].y = o;
@@ -259,29 +257,25 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 				if (c.structs_used >= 8) {
 					continue;
 				}
-				glm::vec2 padd = std::popcount(smp) > 2 ? randuv() : (randuv() * .1f);
-				u32 isi = u32(spawn_struct(c.pos + padd, c.vel));
-				u32 i = compile_options::struct_particle_start + isi;
 				if (std::popcount(smp) > 2) {
+					glm::vec2 padd = std::popcount(smp) > 2 ? randuv() : (randuv() * .1f);
+					u32 isi = u32(spawn_struct(c.pos + padd, c.vel));
+					u32 i = compile_options::struct_particle_start + isi;
 					usize mi = u32(rand() % std::popcount(smp));
 					for (usize j = 0; j < mi; j++) { smp &= (smp-1); }
 					u32 j = u32(std::countr_zero(smp));
 					u32 prevb = c.membrane_bonds[j].x;
-					if (prevb < compile_options::struct_particle_start) {
+					if (prevb != u32(-1)) {
 						bond(prevb, i);
-						c.membrane_bonds[(prevb - compile_options::membrane_particle_start) & 3].y = i;
-						structs[isi].bond_a = prevb;
-					} else if (prevb < compile_options::particle_count) {
-						bond(prevb, i);
-						structs[prevb - compile_options::struct_particle_start].bond_b = i;
+						set_bond(true, prevb, i);
 						structs[isi].bond_a = prevb;
 					}
 					bond(i, membrane_ids + j);
 					structs[isi].bond_b = membrane_ids + j;
 					c.membrane_bonds[j].x = i;
+					c.membrane_structs++;
+					c.structs_used++;
 				}
-				c.membrane_structs++;
-				c.structs_used++;
 			}
 			while (c.flagellum_add >= 100 && c.big_struct_id != u8(-1)) {
 				c.flagellum_add -= 100;
@@ -526,18 +520,43 @@ usize particles::spawn_membrane(glm::vec2 pos, glm::vec2 vel, u32 cell_id, u32 t
 	return mi;
 }
 void particles::kill_membrane(u32 gpu_id) {
-	get_cell_stage(gpu_id)->type = 0;
 	u32 ci = (gpu_id - compile_options::membrane_particle_start) / 4;
 	u32 mi = (gpu_id - compile_options::membrane_particle_start) % 4;
+	glm::uvec2 &bonds = cells[ci].membrane_bonds[mi];
+	if (bonds.x != u32(-1)) {
+		if (!kill_branch(bonds.x, false, gpu_id)) {
+			unbond(bonds.x, gpu_id);
+			set_bond(true, bonds.x, u32(-1)); // bonds.y aliases here :/
+		}
+		bonds.x = u32(-1);
+	}
+	if (bonds.y != u32(-1)) {
+		if (!kill_branch(bonds.y, true, gpu_id)) {
+			unbond(gpu_id, bonds.y);
+			set_bond(false, bonds.y, u32(-1));
+		}
+		bonds.y = u32(-1);
+	}
+	get_cell_stage(gpu_id)->type = 0;
 	cells[ci].membrane_particles &= ~(1 << mi);
-	if (cells[ci].membrane_bonds[mi].x != u32(-1)) {
-		unbond(cells[ci].membrane_bonds[mi].x, gpu_id);
-		set_bond(true, cells[ci].membrane_bonds[mi].x, u32(-1));
+}
+bool particles::kill_branch(u32 at, bool dir, u32 start) {
+	if (at == u32(-1))
+		return true;
+	if (at == start)
+		return false;
+	if (at < compile_options::struct_particle_start)
+		return false;
+	u32 si = at - compile_options::struct_particle_start;
+	if (si < compile_options::struct_particle_count) {
+		if (kill_branch(dir ? structs[si].bond_b : structs[si].bond_a, dir, start)) {
+			kill_struct(at);
+			structs[si].bond_a = u32(-1);
+			structs[si].bond_b = u32(-1);
+			return true;
+		}
 	}
-	if (cells[ci].membrane_bonds[mi].y != u32(-1)) {
-		unbond(gpu_id, cells[ci].membrane_bonds[mi].y);
-		set_bond(false, cells[ci].membrane_bonds[mi].y, u32(-1));
-	}
+	return false;
 }
 usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
 	if (free_structs.empty()) {
@@ -567,6 +586,7 @@ void particles::kill_struct(u32 gpu_id) {
 	}
 }
 void particles::bond(u32 gi_a, u32 gi_b) {
+	//logs::debugln("particles", "bond ", gi_a, " - ", gi_b);
 	u32 bi = next_bond_stage;
 	next_bond_stage = (next_bond_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	cell_stage_map[bi].bond_a = gi_a;
@@ -577,6 +597,7 @@ void particles::bond(u32 gi_a, u32 gi_b) {
 		gi_a * sizeof(particle) + offsetof(particle, bond_b), sizeof(u32)});
 }
 void particles::unbond(u32 gi_a, u32 gi_b) {
+	//logs::debugln("particles", "unbond ", gi_a, " x ", gi_b);
 	u32 bi = next_bond_stage;
 	next_bond_stage = (next_bond_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	cell_stage_map[bi].bond_a = u32(-1);

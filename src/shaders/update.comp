@@ -163,8 +163,8 @@ void main() {
 		if (type == 2) {
 			for (uint i = 0; i < 4; i++) {
 				uint j = MEMBRANEP_START + 4*(particle_id - CELLP_START) + i;
-				if (particles.data[j].type == 4) { vel += bond(pos, ov, j, 1.5, .002); }
-				if (particles.data[j].type == 5) { vel += bond(pos, ov, j, 1., .002); }
+				if (particles.data[j].type == 4) { vel += bond(pos, ov, j, 1.5, .002)*.3; }
+				if (particles.data[j].type == 5) { vel += bond(pos, ov, j, 1., .002)*.3; }
 			}
 		} else if (type == 4) {
 			uint celli = (particle_id - MEMBRANEP_START)/4;

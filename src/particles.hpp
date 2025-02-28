@@ -118,6 +118,7 @@ public:
 	void kill_cell(u32 gpu_id);
 	usize spawn_membrane(glm::vec2 pos, glm::vec2 vel, u32 cell_id, u32 type=4);
 	void kill_membrane(u32 gpu_id);
+	bool kill_branch(u32 at, bool dir, u32 start);
 	usize spawn_struct(glm::vec2 pos, glm::vec2 vel);
 	void kill_struct(u32 gpu_id);
 	void bond(u32 gi_a, u32 gi_b);
