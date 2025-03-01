@@ -164,11 +164,11 @@ protein_info folder::analyze(const compounds &comp) const {
 	std::vector<bool> max_genome_site;
 	usize max_g_seq_len = 0;
 	const auto check_edges = [this, &max_genome_site, &max_g_seq_len, &max_genome_site_pos](usize bound,
-		usize add, usize mul, u8 shift) {
+		isize add, isize mul, u8 shift) {
 		std::vector<bool> genome_site;
 		usize g_seq_len = 0;
-		for (usize i = 0; i < bound; i++) {
-			const std::vector<u8> place = placed[add + mul * i];
+		for (isize i = 0; usize(i) < bound; i++) {
+			const std::vector<u8> place = placed[usize(add + mul * i)];
 			if (place.size() != 1 || (place[0] >> shift & 3) != 1) {
 				max_g_seq_len = std::max(g_seq_len, max_g_seq_len);
 				g_seq_len = 0;
@@ -178,7 +178,7 @@ protein_info folder::analyze(const compounds &comp) const {
 			if (place.size() != 1 || (0b101 >> (place[0] >> shift & 3) & 1) != 1) {
 				if (max_genome_site.size() < genome_site.size()) {
 					max_genome_site.swap(genome_site);
-					max_genome_site_pos = add + mul * i;
+					max_genome_site_pos = usize(add + mul * i);
 				}
 				genome_site.clear();
 			} else {
@@ -188,13 +188,13 @@ protein_info folder::analyze(const compounds &comp) const {
 		max_g_seq_len = std::max(g_seq_len, max_g_seq_len);
 		if (max_genome_site.size() < genome_site.size()) {
 			max_genome_site.swap(genome_site);
-			max_genome_site_pos = add + mul * bound;
+			max_genome_site_pos = usize(add + mul * isize(bound));
 		}
 	};
-	check_edges(width, 0, height, 6);
-	check_edges(width, height-1, height, 2);
-	check_edges(height, 0, 1, 0);
-	check_edges(height, (width-1)*height, 1, 4);
+	check_edges(width, 0, isize(height), 6);
+	check_edges(width, isize(width*height-1), -isize(height), 2);
+	check_edges(height, isize(height-1), -1, 0);
+	check_edges(height, isize((width-1)*height), 1, 4);
 	if (max_g_seq_len > 3) {
 		out.is_positive_factor = true;
 	}

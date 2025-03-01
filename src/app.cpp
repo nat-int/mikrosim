@@ -310,6 +310,7 @@ void mikrosim_window::update() {
 				p->comps->at(p->comps->atoms_to_id[g0_comp], i) = .3f;
 				p->comps->at(p->comps->atoms_to_id[g1_comp], i) = .3f;
 				p->comps->at(3, i) = 1.6f; // g1 metabolism
+				p->comps->at(43, i) = 1.2f;
 				p->comps->at(45, i) = 0.3f;
 				p->comps->at(58, i) = 1.4f;
 				p->comps->at(63, i) = 1.0f;

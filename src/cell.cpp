@@ -86,7 +86,7 @@ bool cell::add_protein(const compounds &comps, usize s, bool direct_transcriptio
 	} else if (info.reaction_input.empty()) {
 		e = empty_protein{};
 	} else {
-		static constexpr f32 c = 0.018f; // just looked nice-ish in desmos :P
+		static constexpr f32 c = 0.018f; // just looked nice-ish in desmos :P, can choose because the energy units are undecided before
 		f32 K = glm::exp(f32(-info.energy_balance) * c); // based on K = exp(-dG / RT)
 		if (info.is_genome_polymerase && info.energy_balance < 0) {
 			e = special_chem_protein{{info.reaction_input, info.reaction_output, K},
@@ -197,8 +197,9 @@ void cell::update_tick(compounds &comps, protein &prot) {
 	f32 req_cata_worst = 0.f;
 	for (const auto &c : prot.catalyzers) {
 		f32 conc = comps.at(c.compound, at);
+		f32 cata;
 		if (c.effect > 0) {
-			cata_effect += conc * conc - 1 + c.effect;
+			cata = conc * conc - 1 + c.effect;
 		} else {
 			f32 cata_fun = conc * conc - 1;
 			f32 inhib_fun = -conc;
@@ -208,12 +209,12 @@ void cell::update_tick(compounds &comps, protein &prot) {
 			f32 cata_coef = 2 * eff3 - 3 * eff2 + 1; // smoothstep interpolation
 			f32 inhib_coef = -2 * eff3 + 3 * eff2;
 			cata_effect += inhib_fun * inhib_coef;
-			f32 cata = cata_fun * cata_coef;
-			if (cata > 0.f)
-				cata_effect += cata;
-			else
-				req_cata_worst = std::min(cata, req_cata_worst);
+			cata = cata_fun * cata_coef;
 		}
+		if (cata > 0.f)
+			cata_effect += cata;
+		else
+			req_cata_worst = std::min(cata, req_cata_worst);
 	}
 	cata_effect = std::max(req_cata_worst+cata_effect, 0.f);
 	std::visit(overloaded{
