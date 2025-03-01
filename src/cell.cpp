@@ -14,11 +14,9 @@ static constexpr u32 max_health = 1000;
 cell::cell() : s(state::none), membrane_particles(0) { }
 cell::cell(u32 gi, glm::vec2 p, glm::vec2 v) : s(state::active), gpu_id(gi), pos(p), vel(v),
 	division_pos(0), next_update(0), next_create(0), health(max_health), membrane_particles(0),
-	big_struct_id(u8(-1)),
-	membrane_bonds({glm::uvec2{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)},{u32(-1), u32(-1)}}),
-	small_struct(0), small_struct_effective(0), big_struct(0), big_struct_effective(0), membrane_add(0),
-	flagellum_add(0), membrane_structs(0), structs_used(0), big_struct_force(0.f, 0.f),
-	net_movement(0.f) { }
+	big_struct_id(u8(-1)), small_struct(0), small_struct_effective(0), big_struct(0),
+	big_struct_effective(0), membrane_add(0), flagellum_add(0), membrane_structs(0),
+	structs_used(0), big_struct_force(0.f, 0.f), net_movement(0.f) { }
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 void cell::update(compounds &comps, bool protein_create) {

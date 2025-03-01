@@ -46,7 +46,8 @@ void main() {
 		uint terminator = 256;
 		float density = 0;
 		float mix_density = 0;
-		for (uint i = top_range.x; i < top_range.y; i++) {
+		for (uint i = bot_range.y; i > bot_range.x;) {
+			i--;
 			vec2 rp = cells.data[i].pos - adj_pos;
 			float dist = max(length(rp), 0.0001);
 			if (dist < 1.0) {
@@ -57,7 +58,8 @@ void main() {
 				break;
 			terminator--;
 		}
-		for (uint i = mid_range.x; i < mid_range.y; i++) {
+		for (uint i = mid_range.y; i > mid_range.x;) {
+			i--;
 			vec2 rp = cells.data[i].pos - adj_pos;
 			float dist = max(length(rp), 0.0001);
 			if (dist < 1.0) {
@@ -68,7 +70,8 @@ void main() {
 				break;
 			terminator--;
 		}
-		for (uint i = bot_range.x; i < bot_range.y; i++) {
+		for (uint i = top_range.y; i > top_range.x;) {
+			i--;
 			vec2 rp = cells.data[i].pos - adj_pos;
 			float dist = max(length(rp), 0.0001);
 			if (dist < 1.0) {

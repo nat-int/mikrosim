@@ -24,7 +24,6 @@ public:
 	u32 health;
 	u8 membrane_particles;
 	u8 big_struct_id;
-	std::array<glm::uvec2, 4> membrane_bonds;
 	u32 small_struct, small_struct_effective;
 	u32 big_struct, big_struct_effective;
 	u32 membrane_add;

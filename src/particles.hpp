@@ -44,8 +44,6 @@ struct update_uniform {
 };
 struct struct_particle {
 	bool active;
-	u32 bond_a;
-	u32 bond_b;
 };
 
 class particles {
@@ -92,6 +90,7 @@ private:
 public:
 	std::array<cell, compile_options::cell_particle_count> cells;
 	std::array<struct_particle, compile_options::struct_particle_count> structs;
+	std::array<glm::uvec2, compile_options::membrane_particle_count+compile_options::struct_particle_count> bonds;
 	std::unique_ptr<compounds> comps;
 	cpu_timestamps cpu_ts;
 	f32 global_density;
@@ -123,7 +122,5 @@ public:
 	void kill_struct(u32 gpu_id);
 	void bond(u32 gi_a, u32 gi_b);
 	void unbond(u32 gi_a, u32 gi_b);
-	void set_bond(bool bond, u32 gi, u32 bonded);
-	void inbond(u32 gi_a, u32 gi_b, u32 gi_in);
 };
 
