@@ -450,7 +450,7 @@ u32 particles::pframe() const { return u32(proc.frame); }
 vk::Buffer particles::particle_buff() const { return *proc.main_buffer[proc.frame]; }
 
 void particles::debug_dump() const {
-	logs::debugln("dump", "------------ BEGIN PARTICLE DEBUG DUMP ------------------");
+	/*logs::debugln("dump", "------------ BEGIN PARTICLE DEBUG DUMP ------------------");
 	logs::debugln("dump", "particle_buff[0]:");
 	particle *particle_data = static_cast<particle *>(proc.main_buffer[0].map());
 	for (usize i = 0; i < compile_options::particle_count; i++) {
@@ -459,7 +459,20 @@ void particles::debug_dump() const {
 			particle_data[i].pos.y, "], density is ", particle_data[i].density);
 	}
 	proc.main_buffer[0].unmap();
-	logs::debugln("dump", "------------- END PARTICLE DEBUG DUMP -------------------");
+	logs::debugln("dump", "------------- END PARTICLE DEBUG DUMP -------------------");// */
+	particle *particle_data = static_cast<particle *>(proc.main_buffer[0].map());
+	for (usize i = 0; i < compile_options::membrane_particle_count + compile_options::struct_particle_count; i++) {
+		u32 gi = u32(compile_options::membrane_particle_start + i);
+		if (bonds[i].x != u32(-1) || bonds[i].y != u32(-1))
+			logs::debugln("particles", "particle ", gi, "'s bonds: [", bonds[i].x, ", ", bonds[i].y, "]");
+		if (particle_data[gi].bond_a != bonds[i].x) {
+			logs::warnln("particles", "particle ", gi, "'s bond A doesn't match: gpu says ", particle_data[gi].bond_a, ", cpu says ", bonds[i].x);
+		}
+		if (particle_data[gi].bond_b != bonds[i].y) {
+			logs::warnln("particles", "particle ", gi, "'s bond B doesn't match: gpu says ", particle_data[gi].bond_b, ", cpu says ", bonds[i].y);
+		}
+	}
+	logs::debugln("bonds checked");
 }
 
 constexpr u32 particle_no_bonds_size = offsetof(particle, bond_a);
@@ -501,7 +514,6 @@ usize particles::spawn_membrane(glm::vec2 pos, glm::vec2 vel, u32 cell_id, u32 t
 	u32 mi = u32(std::countr_one(cells[cell_id].membrane_particles));
 	cells[cell_id].membrane_particles |= 1 << mi;
 	u32 gi = compile_options::membrane_particle_start + 4 * cell_id + mi;
-	bonds[gi - compile_options::membrane_particle_start] = {u32(-1), u32(-1)};
 	get_cell_stage(gi)->set(pos, vel, type);
 	return mi;
 }
@@ -509,15 +521,11 @@ void particles::kill_membrane(u32 gpu_id) {
 	u32 ci = (gpu_id - compile_options::membrane_particle_start) / 4;
 	u32 mi = (gpu_id - compile_options::membrane_particle_start) % 4;
 	glm::uvec2 &b = bonds[gpu_id - compile_options::membrane_particle_start];
-	if (b.x != u32(-1)) {
-		if (!kill_branch(b.x, false, gpu_id)) {
-			unbond(b.x, gpu_id);
-		}
+	if (!kill_branch(b.x, false, gpu_id)) {
+		unbond(b.x, gpu_id);
 	}
-	if (b.y != u32(-1)) {
-		if (!kill_branch(b.y, true, gpu_id)) {
-			unbond(gpu_id, b.y);
-		}
+	if (!kill_branch(b.y, true, gpu_id)) {
+		unbond(gpu_id, b.y);
 	}
 	get_cell_stage(gpu_id)->type = 0;
 	cells[ci].membrane_particles &= ~(1 << mi);
@@ -548,7 +556,6 @@ usize particles::spawn_struct(glm::vec2 pos, glm::vec2 vel) {
 	get_cell_stage(gi)->set(pos, vel, 3);
 	for (usize i = 0; i < compounds::count; i++) { comps->at(i, gi) = 0.f; }
 	structs[si] = {true};
-	bonds[gi - compile_options::membrane_particle_start] = {u32(-1), u32(-1)};
 	return si;
 }
 void particles::kill_struct(u32 gpu_id) {
@@ -574,7 +581,6 @@ void particles::bond(u32 gi_a, u32 gi_b) {
 	bonds[gi_b - compile_options::membrane_particle_start].x = gi_a;
 }
 void particles::unbond(u32 gi_a, u32 gi_b) {
-	//logs::debugln("particles", "unbond ", gi_a, " x ", gi_b);
 	u32 bi = next_bond_stage;
 	next_bond_stage = (next_bond_stage + 1) % (sim_frames * compile_options::no_env_particle_count);
 	cell_stage_map[bi].bond_a = u32(-1);
@@ -585,5 +591,6 @@ void particles::unbond(u32 gi_a, u32 gi_b) {
 		gi_a * sizeof(particle) + offsetof(particle, bond_b), sizeof(u32)});
 	bonds[gi_a - compile_options::membrane_particle_start].y = u32(-1);
 	bonds[gi_b - compile_options::membrane_particle_start].x = u32(-1);
+	//logs::debugln("particles", "unbond ", gi_a, " x ", gi_b);
 }
 

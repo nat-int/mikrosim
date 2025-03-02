@@ -79,7 +79,11 @@ void main() {
 	uint particle_id = gl_GlobalInvocationID.x;
 	if (particle_id < push.pcount) {
 		uint type = particles.data[particle_id].type;
+		uint bond_a = particles.data[particle_id].bond_a;
+		uint bond_b = particles.data[particle_id].bond_b;
 		particles_next.data[particle_id].type = type;
+		particles_next.data[particle_id].bond_a = bond_a;
+		particles_next.data[particle_id].bond_b = bond_b;
 		if (type == 0) {
 			return;
 		}
@@ -185,8 +189,6 @@ void main() {
 				}
 			}
 		}
-		uint bond_a = particles.data[particle_id].bond_a;
-		uint bond_b = particles.data[particle_id].bond_b;
 		if (type > 2) { // this branch should be mostly consistent in work groups since the types are grouped
 			if (bond_a != 0xffffffffu && bond_a != particle_id) {
 				vel += bond(pos, ov, bond_a, 0.3, .002);
@@ -204,9 +206,6 @@ void main() {
 		if (pos.y < 0) { pos.y = -pos.y; vel.y = -vel.y; }
 		particles_next.data[particle_id].pos = pos + vel;
 		particles_next.data[particle_id].vel = vel;
-		particles_next.data[particle_id].type = type;
-		particles_next.data[particle_id].bond_a = bond_a;
-		particles_next.data[particle_id].bond_b = bond_b;
 	}
 }
 
