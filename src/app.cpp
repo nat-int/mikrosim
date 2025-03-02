@@ -531,7 +531,7 @@ void mikrosim_window::render(vk::CommandBuffer cmd, const rend::simple_mesh &bg_
 			ImGui::SliderFloat("target conc", &p->chem_blocks[i].target_conc, 0.f, 4.f);
 			ImGui::SliderFloat("strength", &p->chem_blocks[i].lerp_strength, 0.f, 1.f);
 			ImGui::SliderFloat("direct add", &p->chem_blocks[i].hard_delta, -1.f, 1.f);
-			ImGui::SliderInt("compound", reinterpret_cast<i32 *>(&p->chem_blocks[i].comp), 0, compounds::count);
+			ImGui::SliderInt("compound", reinterpret_cast<i32 *>(&p->chem_blocks[i].comp), 0, compounds::count-1);
 			ImGui::PopID();
 		}
 	}

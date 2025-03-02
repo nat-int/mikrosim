@@ -52,7 +52,7 @@ sudo pacman -S shaderc
 then you can build and run the project like this:
 
 ```sh
-git clone https://github.com/nat-int/mikrosim.git
+git clone --recurse-submodules https://github.com/nat-int/mikrosim.git
 cd mikrosim
 cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release -DVULKAN_VALIDATION=OFF -DCOMPILE_SHADERS=OFF
 cmake --build build
@@ -64,7 +64,7 @@ cd out
 or if you want a more development-friendly setup:
 
 ```sh
-git clone https://github.com/nat-int/mikrosim.git
+git clone --recurse-submodules https://github.com/nat-int/mikrosim.git
 cd mikrosim
 cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release -DVULKAN_VALIDATION=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build

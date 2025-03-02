@@ -23,7 +23,7 @@
 #set par(justify: true, first-line-indent: 0.2em, spacing: 1.5em)
 #set heading(numbering: "1.")
 
-#let title = [Simulování mikroorganismů]
+#let title = [Simulování života mikroorganismů v modelovém mikrosvětě]
 
 #set document(title: title, author: "Filip Majer", keywords: ())
 #show outline.entry.where(level: 1): it => { v(12pt, weak: true); strong(it); }
@@ -193,6 +193,111 @@ je to snadná podmínka a zelený kus okraje může být místo na které nased�
 = Návod k použití
 
 == Kompilace
+
+Na sestavení projektu je potřeba mít nainstalované následující programy a knihovny (knihovny se hledají pomocí `find_package` v CMake):
+
+ - kompilátor c++, který (dostatečně) podporuje c++23, například g++ 14 nebo novější nebo clang++ 18 nebo novější
+ - CMake 3.22 nebo novější
+ - sestavovací systém podporovaný cmake, například GNU make
+ - knihovnu glm
+ - knihovny pro vulkan (včetně vulkan-hpp verze 1.4.309 nebo novější), typicky z LunarG Vulkan SDK (#link("https://vulkan.lunarg.com/")), ale pro linux bývají v repozitářích
+ - knihovnu vulkan memory allocator
+ - knihovnu boost 1.81 nebo novější (stačí komponenta math)
+
+Vše lze dohromady systému Ubuntu nainstalovat následujícím bash skriptem, ale pravděpodobně je v repozitářích několik z těchto věcí v moc starých verzích:
+
+```bash
+sudo apt install build-essential cmake
+sudo apt install vulkan-tools libvulkan-dev spirv-tools
+sudo apt install libglfw3-dev libglm-dev libboost-dev
+
+git clone https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+cd VulkanMemoryAllocator
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+sudo cmake --build build -t install
+```
+
+Tento projekt pak jde naklonovat a zkompilovat následujícím bash skriptem:
+
+```bash
+git clone --recurse-submodules https://github.com/nat-int/mikrosim.git
+cd mikrosim
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release -DVULKAN_VALIDATION=OFF \
+	-DCOMPILE_SHADERS=OFF
+cmake --build build
+```
+
+Výsledný spustitenlný soubour pak je `./out/mikrosim`, případně `./out/mikrosim.exe`, (relativně k cestě po příkazu `cd mikrosim`). Je ho potřeba spouštět ze složky `./out/`.
+
+== Návod k aplikaci
+
+Po prvním spuštění vypadá aplikace přibližně takto:
+
+#figure(image("app_on_open.png", width: 100%), caption: [aplikace po spuštění])
+
+Obsahuje několik podoken, se kterými se dá levým tlačítkem myši pohybovat a připínat k hlavnímu oknu nebo do sebe navzájem. Mimo podoken je vidět zobrazení simulace (modrý čtverec za okny).
+
+=== okno "Controls"
+
+#figure(image("controls.png", width: 50%))
+
+Okno "Controls" obsahuje seznam kláves/akcí pro interakci se zobrazením simulace s popisem jejich efektu.
+
+=== okno "mikrosim"
+
+#figure(image("mikrosim.png", width: 80%))
+
+Okno mikrosim začíná počtem snímků v poslední vteřině, poté text říkající, zda simulace běží a tlačítko, které simulaci spustí, nebo zastaví.
+
+Na druhém řádku je posuvník, na kterém se nastavuje počet kroků simulace, které se provedou mezi každými dvěma snímky (když simulace běží).
+
+Na třetím řádku je posuvník, na kterém se nastavuje látka, která se právě zobrazuje. Pod ním je obrázek dané látky a energie uložená v jejích vazbách.
+
+Další posuvník nastavuje koncentraci, na kterou klávesy G a B nastavují (když se stiskne klávesa B když žádné okno nemá "focus", tak se koncentrace všech proteinogeních látek nastaví na tuto hodnotu).
+
+Následující 3 posuvníky nastavují vlastnosti tekutiny - hustotu, které se snaží dosáhnout, koeficient síly vyrovnávání hustoty a viskozitu.
+
+Poslední posuvník nastavuje velikost částic při jejich vykreslování.
+
+Pod posuvníky jsou tabulky s časy jednotlivých částí výpočtů simulace a vykreslování.
+
+=== okno "effect blocks"
+
+#figure(image("effect_blocks.png", width: 60%))
+
+Toto okno obsahuje nastavení "efektových bloků", kterými se dá ovlivňovat simulace. Existují jich 2 typy: silové ("force blocks") a chemické ("chem blocks").
+Silové bloky umožňují působit silou na částice v obdélníkové oblasti simulace. Chemické umožňují ovlivňovat koncentrace nějaké látky v obdélníkové oblasti simulace.
+Od obou typů jsou dostupné 4 bloky. Bloky se vykreslují přes zobrazení simulace s vysokou průhledností, silové bloky červeně a chemické zeleně.
+
+Na začátku jsou dvě textová pole s tlačítky - první umožňuje načíst nastavení všech bloků ze souboru, jehož cesta je napsána v textovém poli. Druhý umožňuje do souboru v textovém poli nastavení všech bloků uložit.
+
+Pak následují nastavení silových bloků. Každé začíná pozicí a velikostí v osách x a y. Na třetím řádku posuvníků je nastavení homogení síly v osách x a y. Na čtvrtém řádku je nastavení síly kolem středu bloku (proti směru hodinových ručiček) a síla ke středu bloku. Síly jsou malé a tak chvilku trvá, než zapůsobí.
+
+#figure(image("chem_block.png", width: 55%))
+
+Poté následují nastavení chemických bloků. Stejně jako u silových bloků začínají dvěma řádky nastavení pozice a velikosti. Poté následuje cílová koncentrace, ke které se koncentrace přibližuje, poté síla, která určuje rychlost tohoto přibližování. Posuvník "direct add" udává koncentraci, která se přičítá ve všech částicím v oblasti. Nakonec je posuvník určující látku, kterou blok zrovna ovlivňuje (čísla látek jsou stejná jako v okně "mikrosim").
+
+=== okno "extra info"
+
+#figure(image("extra_info.png", width: 60%))
+
+Okno extra info obsahuje tabulku pro převod mezi označením v genomu a látkou v proteinu.
+
+=== okno "cell list"
+
+#figure(image("cell_list.png", width: 40%))
+
+Okno cell list obsahuje seznam všech živých buňek s jejich identifikačním číslem, pozicí a rychlostí.
+
+=== okno "protein view"
+
+#figure(image("protein_view.png", width: 50%))
+
+
+=== okno "cell view"
+
+=== zobrazení simulace
 
 = Závěr
 
