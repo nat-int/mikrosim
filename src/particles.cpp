@@ -224,8 +224,7 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 				c.big_struct_effective += big_struct_cost;
 				c.big_struct_pos = c.pos + randuv();
 				c.big_struct_id = u8(spawn_membrane(c.big_struct_pos, c.vel, cell_id, 4));
-			}
-			if (c.small_struct < c.small_struct_effective) {
+			} else if (c.small_struct < c.small_struct_effective) {
 				u32 mi = u32(std::countr_zero(smp));
 				kill_membrane(membrane_ids + mi);
 				c.small_struct_effective -= small_struct_cost;
@@ -246,12 +245,9 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 				}
 			}
 		} else {
-			while (c.membrane_add >= 100) {
+			if (c.membrane_add >= 100) {
 				c.membrane_add -= 100;
-				if (c.structs_used >= 8) {
-					continue;
-				}
-				if (std::popcount(smp) > 2) {
+				if (c.structs_used < 8 && std::popcount(smp) > 2) {
 					glm::vec2 padd = std::popcount(smp) > 2 ? randuv() : (randuv() * .1f);
 					u32 isi = u32(spawn_struct(c.pos + padd, c.vel));
 					u32 i = compile_options::struct_particle_start + isi;
@@ -267,20 +263,19 @@ void particles::tick_cell(bool protein_creation, u32 cell_id) {
 					c.structs_used++;
 				}
 			}
-			while (c.flagellum_add >= 100 && c.big_struct_id != u8(-1)) {
+			if (c.flagellum_add >= 100 && c.big_struct_id != u8(-1)) {
 				c.flagellum_add -= 100;
-				if (c.structs_used >= 8) {
-					continue;
+				if (c.structs_used < 8) {
+					u32 bi = membrane_ids + c.big_struct_id;
+					u32 isi = u32(spawn_struct(c.big_struct_pos + randuv() * .2f, c.vel));
+					u32 i = compile_options::struct_particle_start + isi;
+					u32 prevb = bonds[bi - compile_options::membrane_particle_start].x;
+					if (prevb != u32(-1)) {
+						bond(prevb, i);
+					}
+					bond(i, bi);
+					c.structs_used++;
 				}
-				u32 bi = membrane_ids + c.big_struct_id;
-				u32 isi = u32(spawn_struct(c.big_struct_pos + randuv() * .2f, c.vel));
-				u32 i = compile_options::struct_particle_start + isi;
-				u32 prevb = bonds[bi - compile_options::membrane_particle_start].x;
-				if (prevb != u32(-1)) {
-					bond(prevb, i);
-				}
-				bond(i, bi);
-				c.structs_used++;
 			}
 		}
 		if (c.division_pos >= c.genome.size()) {
