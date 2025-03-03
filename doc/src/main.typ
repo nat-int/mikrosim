@@ -205,16 +205,59 @@ Navázaný transkripční faktor blokuje v daném místě transkripci, z důvodu
 Pokud na okraji také obsahuje řadu alespoň tří zelených podčástí (ve stejném smyslu okraje jako v předchozích odstavcích), je transkripční faktor pozitivní a od daného místa transkripci spouští.
 Zelená část okraje slouží jako místo, na které nasedá ekvivalent RNA transkriptázy.
 
-=== Speciální funkce
+== Buňky
+
+Modelové buňky obsahují centrum, což je speciální typ částice. Každá buňka má svůj genom, který kóduje několik proteinů. Začátek místa transkripce v genomu značí 6 po sobě jdoucích červených bází
+(počítá se od konce úseku) (nebo pozitivní transkripční faktor). Od tohoto místa se genom čte po kodonech. Když se narazí na kodon `a`, který značí start kodon, začnou se do proteinu zapojovat
+další látky podle kodonů, až do kodonu `e` (stop kodonu) včetně.
+
+Každá buňka může obsahovat libovolné množství každého proteinu zakódovaného ve svém genomu, jako to je u látek. Během každého kroku se proteiny mohou tvořit a rozpadat.
+Rozpadne se podíl proteinů podle již zmíněné stability. Vytvořit se může $1/2$ jednotek množství proteinů za krok, $M' dot c'_p$, pokud je tvorba daného proteinu podmíněna pozitivním traskripčním faktorem.
+$M'$ je efekt modulátorů na transkripční faktor a $c'_p$ je jeho koncentrace. Toto množství se sníží o součet $M' dot c'_p$ všech negativních transkripčních faktorů na celém úseku, který protein kóduje.
+Toto množství se sníží v případě, že buňka neobsahuje dostatečné množství látek na tvorbu proteinu.
 
 Modelové buňky potřebují k napodobení života dělat ještě několik věcí, které nespadají pod katalyzátory (enzymy) a transkripční faktory. Jednou z nich je dělení, při kterém se musí nakopírovat celý genom.
-Genom zde kopírují "genomové polymerázy", což jsou proteiny, které mají nanejvýš čtyři pole od sebe aktivní místa pro obě látky, ze kterých se tvoří genom (#box(image("genome_F.png")) a #box(image("genome_T.png"))).
+Genom zde kopírují "genomové polymerázy", což jsou proteiny, které mají nanejvýš čtyři pole od sebe aktivní místa pro obě látky, ze kterých se tvoří genom (#box(image("genome_F.png")) a #box(image("genome_T.png")))
+(takže "pracují s genomem").
 Tyto aktivní místa se nepodílí na reakcích. Kromě toho musí provádět nějakou jinou reakci, ze které získají energii pro tvorbu nového genomu. Vždy, když tuto reakci provede, namnoží se kousek genomu (nebo
 dojde k mutaci). Kopírování probíhá od začátku, postupně.
 Za každý kousek, k nakopírování je malá šance, že se přeskočí báze nebo kodon, že se přidá náhodná báze nebo kodon a nebo, nebo že místo, odkud se právě kopíruje, skočí na náhodné místo v celém genomu.
 Při přidávání určuje šance na vybrání báze jejich koncentrace (koncentrace látky je váha při náhodném výběru).
+Při normálním vkládání další báze se také naváže náhodná báze, ale s velkou pravděpodobností na to, že se odváže, pokud je špatně. Když se odváže, nastane další pokus.
 
-== Buňky
+Buňky v modelu mají body zdraví. S každým krokem simulace 2 body ztratí, což představuje poškozující vliv prostředí - genom se může rozpadat nebo poškozovat a je potřeba ho udržovat.
+Údržbu provádí opravovací proteiny, které mají alespoň 4 pole dlouhý úsek červených a modrých konců (jako mají transkripční faktory, ale delší) a aktivní místo na některou z látek,
+ze kterých je tvořen genom (#box(image("genome_F.png")) nebo #box(image("genome_T.png"))). Toto aktivní místo se pak nepodílí v reakcích. Když tento protein provede
+jinou reakci, ze které se uvolňí energie, dostane buňka, ve které protein je, určité množství bodů zdraví (podle uvolněné energie).
+
+=== Struktury
+
+Kromě centra může modelová buňka obsahovat jiné struktury. První z nich je "veklá struktura". Tou je další částice, která je k centru vázána "pružinou", představující cytoskelet.
+Velká struktura se sestavuje z "proteinů velké struktury", které mají tvar čtverce velikosti 5x5 polí.
+
+#figure(image("struct_proteins.png", width: 40%), caption: [proteiny struktury, nalevo velké, napravo malé (růžová značí překryv látek v jednom poli)])
+
+Tyto proteiny neprovádí žádné reakce a nemohou být modulovány. Když se v buňce vyrobí dostatek proteinů velké struktury, částice se vytvoří, ale může být pouze jedna na buňku.
+Proteiny mohou být označeny tím, že jejich kód končí `3e`. Označené proteiny působí v částici struktury místo centra buňky. Značka se po vytvoření proteinu oddělí, takže
+se protein chová tak, jako kdyby značku neměl.
+
+Na velkou strukturu buňka může působit motory. To jsou proteiny, které jsou velké alespoň 5x5 polí a jsou bodově symetrické podle jejich středu. Zároveň musí provádět reakci, ze které získají energii.
+Podle energie získané z reakce se zapůsobí silou na velkou strukturu ve směru kolem centra buňky. Pokud je protein označený, tak po směru hodinových ručiček, jinak proti směru hodinových ručiček.
+
+Druhý typ struktury jsou strukturní částice. Ty vyrábí slučovač částic, což je protein, který obsahuje dvě modulační místa vedle sebe, do kterých zapadá tato látka:
+
+#figure(image("struct.png", width: 15%), caption: [kombinace látek tvořící strukturní částice])
+
+Tyto modulační místa pak nefungují jako modulační místa. Při provedení reakce uvolňující energii se sestaví trocha těchto větších látek (podle energie a množství látek, které v nich jsou). Poté, co se jich
+sestaví dostatečné množství, přidá se strukturní částice. Když je slučovač označený, přidá se strukturní částice do řetízku za částici velké struktury. Když ne, přidá se do membrány (o té bude více v
+následujícím odstavci).
+
+Třetí typ struktury je "malá struktura". Malé struktury jsou částice, které jsou také k centru vázány pružinou, ale také se váží navzájem a rozestavují se kolem centra. Podobně jako velké struktury
+se tvoří proteiny malé strukury, které mají struktury ve tvaru čtverce o velikosti 3x3 pole. Malé struktury slouží především jako
+základ pro membránu. Když se do membrány přidá strukturní částice, zapojí se do náhodného místa v cyklu malých struktur. Strukturní částice se může do membrány přidat jedině když má buňka alespoň 3
+částice malé struktury.
+
+Buňka může mít maximálně 4 částice velké a malé struktury dohromady a maximálně 8 strukturních částic.
 
 = Implementace
 
@@ -230,11 +273,11 @@ Na sestavení projektu je potřeba mít nainstalované následující programy a
  - CMake 3.22 nebo novější
  - sestavovací systém podporovaný cmake, například GNU make
  - knihovnu glm
- - knihovny pro vulkan (včetně vulkan-hpp verze 1.4.309 nebo novější), typicky z LunarG Vulkan SDK (#link("https://vulkan.lunarg.com/")), ale pro linux bývají v repozitářích
+ - knihovny pro vulkan (včetně vulkan-hpp verze 1.3.301 nebo novější), typicky z LunarG Vulkan SDK (#link("https://vulkan.lunarg.com/")), ale pro linux bývají v repozitářích
  - knihovnu vulkan memory allocator
  - knihovnu boost 1.81 nebo novější (stačí komponenta math)
 
-Vše lze dohromady systému Ubuntu nainstalovat následujícím bash skriptem, ale pravděpodobně je v repozitářích několik z těchto věcí v moc starých verzích:
+Vše lze dohromady systému Ubuntu nainstalovat následujícím bash skriptem, ale pravděpodobně je v repozitářích několik z těchto věcí v moc starých verzích a tak je bude potřeba nainstalovat jinak:
 
 ```bash
 sudo apt install build-essential cmake
@@ -344,7 +387,8 @@ Vedle jsou tlačítka "set", které vybere protein do okna a "log", které vypí
 Stejně jako #link(<effect_blocks>)[okno "effect blocks"], začíná toto okno poli na načítání a ukládání ze souboru. Při načítání ze souboru se ze souboru přečtou znaky označující kodony a báze (0-9, a-f, T, F)
 a do okna se vybere buňka s takovým genomem. Soubor může obsahovat komentáře, které začínají středníkem a končí odřádkováním.
 
-Poté je v okně tabulka informací o buňce - stav, identifikátor, pozice, rychlost, pozice dělicí hlavice, zdraví a stavy membrány (první dvojice čísel je množství malé struktury a využité množství malé struktury,
+Poté je v okně tabulka informací o buňce - stav, identifikátor, pozice, rychlost, pozice místa, ze kterého se právě kopíruje genom, zdraví a
+stavy membrány (první dvojice čísel je množství malé struktury a využité množství malé struktury,
 druhá dvojice je pro velkou strukturu a poslední číslo je postup v tvorbě membrány).
 
 Dále jsou zaškrtávací pole "follow" a "lock graph". Pokud je "follow" zaškrtnuto, pohled ve zobrazení následuje vybranou buňku. Když je zaškrtnuto "lock graph", tak se graf metabolismu (o kterém bude řeč níže) nepohybuje.
