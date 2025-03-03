@@ -83,8 +83,8 @@ add_executable(mikrosim
 	${CMAKE_SOURCE_DIR}/src/rendering/window.cpp ${CMAKE_SOURCE_DIR}/src/rendering/context.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/device.cpp ${CMAKE_SOURCE_DIR}/src/rendering/pipeline.cpp
 		${CMAKE_SOURCE_DIR}/src/rendering/vma_wrap.cpp ${CMAKE_SOURCE_DIR}/src/rendering/2d.cpp
-		${CMAKE_SOURCE_DIR}/src/rendering/buffers.cpp ${CMAKE_SOURCE_DIR}/src/rendering/text.cpp
-		${CMAKE_SOURCE_DIR}/src/rendering/timestamp.cpp ${CMAKE_SOURCE_DIR}/src/rendering/preset.cpp
+		${CMAKE_SOURCE_DIR}/src/rendering/buffers.cpp ${CMAKE_SOURCE_DIR}/src/rendering/timestamp.cpp
+		${CMAKE_SOURCE_DIR}/src/rendering/preset.cpp
 	${CMAKE_SOURCE_DIR}/src/format/qoi.cpp
 	${CMAKE_SOURCE_DIR}/src/input/input.cpp
 	${CMAKE_SOURCE_DIR}/src/util.cpp

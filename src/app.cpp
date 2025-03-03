@@ -26,7 +26,6 @@ mikrosim_window::mikrosim_window() : rend::preset::simple_window("mikrosim", ver
 		{vk::DescriptorType::eCombinedImageSampler, compile_options::frames_in_flight * 64},
 	};
 	dpool = device.createDescriptorPool({vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, compile_options::frames_in_flight * 256, dpool_sizes});
-	setup_text();
 
 	std::vector<glm::vec2> quad_vd = {{-1.f, -1.f}, {1.f, -1.f}, {1.f, 1.f}, {-1.f, 1.f}};
 	std::vector<u16> quad_id = {0,1,2, 0,2,3};

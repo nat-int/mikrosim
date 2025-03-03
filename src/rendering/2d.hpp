@@ -19,24 +19,15 @@ namespace rend {
 		center,
 		top, topright, right, bottomright, bottom, bottomleft, left, topleft,
 	};
-	constexpr inline float text_screen_px_range(float text_size, float sdf_size=16.f) { return text_size / sdf_size; }
 	class renderer2d {
 	public:
-		struct text_push {
-			float scr_px_range;
-		};
-
 		renderer2d(const context &ctx, const vk::raii::Device &device, vk::RenderPass render_pass, u32 width, u32 height);
 		void push_projection(vk::CommandBuffer cmds, const glm::mat4 &proj) const;
 		void push_textured_projection(vk::CommandBuffer cmds, const glm::mat4 &proj) const;
-		void push_text_projection(vk::CommandBuffer cmds, const glm::mat4 &proj) const;
-		void push_text_constants(vk::CommandBuffer cmds, const text_push &push) const;
 		void bind_texture(vk::CommandBuffer cmds, vk::DescriptorSet ds) const;
-		void bind_texture_text(vk::CommandBuffer cmds, vk::DescriptorSet ds) const;
 		void bind_solid_pipeline(vk::CommandBuffer cmds) const;
 		void bind_circle_pipeline(vk::CommandBuffer cmds) const;
 		void bind_textured_pipeline(vk::CommandBuffer cmds) const;
-		void bind_text_pipeline(vk::CommandBuffer cmds) const;
 		glm::mat4 proj(anchor2d a) const;
 		void resize(f32 width, f32 height);
 		template<size_t N> inline std::vector<vk::raii::DescriptorSet> make_texture_ds(vk::DescriptorPool pool) const {
@@ -74,12 +65,10 @@ namespace rend {
 		vk::raii::DescriptorSetLayout texture_dsl;
 		vk::raii::PipelineLayout solid_pipeline_layout;
 		vk::raii::PipelineLayout textured_pipeline_layout;
-		vk::raii::PipelineLayout text_pipeline_layout;
 		std::vector<vk::raii::ShaderModule> shaders;
 		vk::raii::Pipeline solid_pipeline;
 		vk::raii::Pipeline circle_pipeline;
 		vk::raii::Pipeline textured_pipeline;
-		vk::raii::Pipeline text_pipeline;
 		vk::raii::Sampler linear_sampler;
 		vk::raii::Sampler nearest_sampler;
 		std::array<glm::mat4, 9> projs;

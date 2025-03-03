@@ -6,7 +6,6 @@
 #include "buffers.hpp"
 #include "context.hpp"
 #include "renderer.hpp"
-#include "text.hpp"
 #include "vma_wrap.hpp"
 
 namespace rend::preset {
@@ -30,7 +29,6 @@ namespace rend::preset {
 		std::optional<main_render_driver<compile_options::frames_in_flight>> driver;
 		std::optional<buffer_handler> buffer_h;
 		vk::raii::DescriptorPool dpool;
-		rend::text text;
 		std::vector<vk::Semaphore> render_submit_semaphores;
 		std::vector<vk::PipelineStageFlags> render_submit_semaphore_stages;
 		input::input_handler input;
@@ -81,11 +79,9 @@ namespace rend::preset {
 			rend2d.emplace(renderer2d(ctx, device, *swapchain_render_pass, width, height));
 			driver.emplace(main_render_driver<compile_options::frames_in_flight>(ctx, win, device, *present_queue));
 			buffer_h.emplace(buffer_handler(*phy_device.physical_device.handle, device, allocator, *command_pool, *graphics_compute_queue));
-			text.load_ascii_atlas(*buffer_h);
 		}
 		~simple_window();
 
-		void setup_text();
 		template<bool poll, typename F1, typename F2, typename F3=void (*)()> inline void mainloop(F1 update, F2 render, F3 resize_callback=[]() {}) {
 			while (!win.should_close()) {
 				tick<poll>(update,render,resize_callback);
