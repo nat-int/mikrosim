@@ -270,12 +270,12 @@ Buňka může mít maximálně 4 částice velké a malé struktury dohromady a 
 Na sestavení projektu je potřeba mít nainstalované následující programy a knihovny (knihovny se hledají pomocí `find_package` v CMake):
 
  - kompilátor c++, který (dostatečně) podporuje c++23, například g++ 14 nebo novější nebo clang++ 18 nebo novější
- - CMake 3.22 nebo novější
- - sestavovací systém podporovaný cmake, například GNU make
- - knihovnu glm
+ - CMake 3.22 nebo novější (#link("https://cmake.org/download/"))
+ - sestavovací systém, který je podporovaný cmake, například GNU make
+ - knihovnu glm (#link("https://github.com/g-truc/glm"))
  - knihovny pro vulkan (včetně vulkan-hpp verze 1.3.301 nebo novější), typicky z LunarG Vulkan SDK (#link("https://vulkan.lunarg.com/")), ale pro linux bývají v repozitářích
- - knihovnu vulkan memory allocator
- - knihovnu boost 1.81 nebo novější (stačí komponenta math)
+ - knihovnu vulkan memory allocator (#link("https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator"))
+ - knihovnu boost 1.81 nebo novější (stačí komponenta math) (#link("https://www.boost.org/users/download/"))
 
 Vše lze dohromady systému Ubuntu nainstalovat následujícím bash skriptem, ale pravděpodobně je v repozitářích několik z těchto věcí v moc starých verzích a tak je bude potřeba nainstalovat jinak:
 
