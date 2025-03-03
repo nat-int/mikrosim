@@ -27,12 +27,13 @@
 #set par(justify: true, first-line-indent: 0.2em, spacing: 1.5em)
 #set heading(numbering: "1.")
 
-#let title = [Simulování života mikroorganismů v modelovém mikrosvětě]
+#let title = [Grafická aplikace pro simulaci mikroorganismů]
 
 #set document(title: title, author: "Filip Majer", keywords: ())
 #show outline.entry.where(level: 1): it => { v(12pt, weak: true); strong(it); }
 
 #align(center, [#text(20pt)[*#title*]\
+	Simulování života mikroorganismů v modelovém mikrosvětě\
 	Filip Majer\
 	Vedoucí práce: Emil Miler\
 	Gymnázium Jana Keplera])
@@ -495,7 +496,7 @@ Aplikace dokže simulovat modelové mikroorganismy, které jsou schopné v dobr�
  - #link("https://developer.nvidia.com/cuda-toolkit")
  - #link("https://github.com/SebLague/Fluid-Sim/tree/Episode-01")
  - #link("https://github.com/ocornut/imgui")
- - #link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf") (#link("https://web.archive.org/web/20250113223404/https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf"))
+ - #link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf") (odkaz již nefunguje, ale prezentace je stále na #link("https://web.archive.org/web/20250113223404/https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf"))
  - #link("https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda")
  - #link("https://cmake.org/download/")
  - #link("https://vulkan.lunarg.com/")
