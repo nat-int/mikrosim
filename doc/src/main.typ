@@ -283,7 +283,7 @@ Na multiplatformní vytvoření okna aplikace byla použita knihovna GLFW pro je
 Na výpočty byly využity knihovny glm, a komponenta math z knihovny boost. Glm pomáhá lépe zapisovat efektivní výpočty z lineární algebry. Z boost math byly využity funkce na řešení
 kvadratických, kubických a kvartických rovnic, které vyvstávají při výpočtech reakcí.
 
-Na zobrazování informací a interakci s uživatelem byla vybrána knihovna ImGUI, kterou je především snadné používat.
+Na zobrazování informací a interakci s uživatelem byla vybrána knihovna ImGUI (#link("https://github.com/ocornut/imgui")), kterou je především snadné používat.
 
 == Struktura kódu
 
@@ -313,11 +313,11 @@ Algoritmus pro hledání blízkých částic byl použit tento: #link("https://r
 Rozpouštění látek probíhá tak, že se do paměti grafické jednotky nakopírují koncentrace 4 látek (4 jsou protože jsou grafické jednotky obvykle dělané na počítání se čtveřicemi čísel) a během počítání interakcí
 částic se provede i rozpouštění. Při následujícím kroku simulace se koncentrace látek po rozpuštění zkopírují zpět do paměti prcesoru a nahrají se koncentrace následujících 4 látek. Takto se rozpouštěné látky postupně střídají.
 
-Aby se urychlila práce na procesoru v případech, kdy buňky obsahují mnoho různých proteinů, zhodnotí se každým krokem jen jeden protein a buď vytváření, nebo aktivita proteinu. Proteiny se postupně prochází po krocích a koeficienty jsou upravené tak, aby se započítaly změny za kroky, kdy se počítají jiné proteiny.
+Aby se urychlila práce na procesoru v případech, kdy buňky obsahují mnoho různých proteinů, zhodnotí se každým krokem jen jeden protein a buď vytváření, nebo aktivita proteinu. Proteiny se postupně procházejí po krocích a koeficienty jsou upravené tak, aby se započítaly změny za kroky, kdy se počítají jiné proteiny.
 
 Do koncentrací látek, které se právě rozpouští nebo kopírují zpět po rozpouštění, nelze právě zapisovat,
 protože by se přepsaly novými hodnotami (výsledky rozpouštění). Když lze zapisovat do všech "aminokyselin" (přibližně v $1/3$ případů),
-vyhodnocuje se vytváření proteinů, jinak se počítají jejich aktivity. Kdyby měl nějaký protein měnit koncentraci látek, které se zrovna rozpouští, tak se jeho vyhodnocení vynechá.
+vyhodnocuje se vytváření proteinů, jinak se počítají jejich aktivity. Pokud by měl nějaký protein měnit koncentraci látek, které se zrovna rozpouštějí, jeho vyhodnocení se vynechá.
 
 = Návod k použití
 
@@ -448,10 +448,10 @@ Poté je v okně tabulka informací o buňce - stav, identifikátor, pozice, ryc
 stavy membrány (první dvojice čísel je množství malé struktury a využité množství malé struktury,
 druhá dvojice je pro velkou strukturu a poslední číslo je postup v tvorbě membrány).
 
-Dále jsou zaškrtávací pole "follow" a "lock graph". Pokud je "follow" zaškrtnuto, pohled ve zobrazení následuje vybranou buňku. Když je zaškrtnuto "lock graph", tak se graf metabolismu (o kterém bude řeč níže) nepohybuje.
+Dále jsou zaškrtávací pole "follow" a "lock graph". Pokud je "follow" zaškrtnuto, pohled ve zobrazení následuje vybranou buňku. Když je zaškrtnuto "lock graph", graf metabolismu (o kterém bude řeč níže) se nepohybuje.
 
 Následuje genom buňky nakreslený jenom barvami bází. Když se myší najede na protein v seznamu proteinů (o kterém také bude řeč později), podtrhne se žlutě místo, kde je v genomu kódován.
-Pokud je to transkripční faktor, vyznačí se fialově místa, kam se váže. Zároveň se ukazují bílou místa, kde se působí negativní transkripční faktory a zelenou místa, kde působí pozitivní transkripční faktory.
+Pokud je to transkripční faktor, vyznačí se fialově místa, kam se váže. Zároveň jsou vyznačeny bílou místa, kde se působí negativní transkripční faktory a zelenou místa, kde působí pozitivní transkripční faktory.
 
 Dále se nachází graf koncentrací látek ve vybrané buňce. Když se myší najede na protein v seznamu proteinů, tak se červeně vyznačí jeho reaktanty, zeleně produkty a modře modulátory.
 Barvy zvýraznění se mísí, takže žlutě zvýrazněný sloupek znamená, že je látka reaktant i produkt.
@@ -483,7 +483,7 @@ Klávesa B má podobný efekt, jen nastavuje koncentrace všech modelových amin
 
 = Závěr
 
-Aplikace dokže simulovat modelové mikroorganismy, které jsou schopné v dobrých podmínkách přežívat a do jisté míry adaptovat na nové.
+Aplikace dokže simulovat modelové mikroorganismy, které jsou schopné v dobrých podmínkách přežívat a do jisté míry se adaptovat na nové.
 
 = Seznam odkazů
 
@@ -492,6 +492,7 @@ Aplikace dokže simulovat modelové mikroorganismy, které jsou schopné v dobr�
  - #link("https://alien-project.org/")
  - #link("https://developer.nvidia.com/cuda-toolkit")
  - #link("https://github.com/SebLague/Fluid-Sim/tree/Episode-01")
+ - #link("https://github.com/ocornut/imgui")
  - #link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf") (#link("https://web.archive.org/web/20250113223404/https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf"))
  - #link("https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda")
  - #link("https://cmake.org/download/")
