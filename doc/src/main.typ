@@ -30,7 +30,8 @@
 
 #align(center, [#text(20pt)[*#title*]\
 	Filip Majer\
-	Gymnázium Jana Keplera])
+	Gymnázium Jana Keplera\
+	Vedoucí práce: Emil Miler])
 
 #align(center, [#link("https://github.com/nat-int/mikrosim")])
 
@@ -42,19 +43,19 @@
 = Úvod
 
 Život je plný komplexních systémů, ale pro jeho zkoumání je někdy užitečné mít zjednodušený model, který jsme schopni plně propočítat. Naše schopnosti počítání posunuly vpřed počítače,
-které dnes už můžeme dávat k propočítání i poměrně komplikované modely.
+kterým dnes už můžeme zadávat k propočítání i poměrně komplikované modely.
 
 == Cíle
 
-Cílem tohoto projektu je vytvořit grafickou aplikaci, která zobrazuje a simuluje život modelových mikroorganismů. Model by měl být takový, aby nebyl moc daleko od středoškolského modelu, toho jak mikroorganismy fungují.
-Zároveň by měl být dostatečně jednoduchý, aby pomocí něj šlo najednou simulovat více variant organismů i na běžně výkonných počítačích.
+Cílem tohoto projektu je vytvořit grafickou aplikaci, která zobrazuje a simuluje život modelových mikroorganismů. Model je zvolen tak, aby nebyl moc daleko od středoškolského modelu, toho jak mikroorganismy fungují.
+Zároveň je dostatečně jednoduchý, aby pomocí něj šlo najednou simulovat více variant organismů i na běžně výkonných počítačích.
 
 == Související práce
 
 Existuje hodně modelů i jejich simulátorů zjednodušeného života. Velká část z nich funguje tak, že se nadefinuje několik typů buněk, kde má každá své specifické chování, ze kterých se
 poskládá organismus. Ten se pak může replikovat do stejné nebo podobné buněčné konfigurace. Jedním takovým simulátorem je Biogenesis (#link("https://biogenesis.sourceforge.net/")).
 
-Jiná velká skupina modelů simuluje organismy jako objekty, které podle definovaných pravidel interagují s okolím a podle vstupů provádí různé akce. Vstupy typicky zpracovávají s využitím neuronových sítí. Příkladem
+Jiná velká skupina modelů simuluje organismy jako objekty, které podle definovaných pravidel interagují s okolím a podle vstupů provádí různé akce. Vstupy se typicky zpracovávají s využitím neuronových sítí. Příkladem
 pro tuto skupinu je The bibites (#link("https://thebibites.itch.io/the-bibites")).
 
 Oba tyto přístupy tak modelují spíše mnohobuněčné organismy než jednobuněčné mikroorganismy.
@@ -72,7 +73,7 @@ Model je ve dvou dimenzích, aby bylo snadnější jej implementovat a přehledn
 Mikroorganismy žijí v definovaném prostředí. Jako základ prostředí této simulace byla zvolena tekutina, protože i skutečné mikroorganismy často žijí ve vodě.
 Standardní způsoby simulování tekutin jsou částicové, eulerovské (kontinuální) a kombinované. V tomto prezentovaném modelu byl použit částicový model z tohoto simulátoru:
 #link("https://github.com/SebLague/Fluid-Sim/tree/Episode-01"), především proto, že daný model je snadno implementovatelný, zároveň je pro částicové simulace snažší zabránit tvorbě hmoty z ničeho.
-Do prezentovaného modelu byl převzat bez korekcí shlukování částic při rychlých ztrátách tlaku, protože chování tekutiny příliš neovlivní a jejich vynecháním se model zjednodušší.
+Do prezentovaného modelu byl tento částicový model převzat bez korekcí shlukování částic při rychlých ztrátách tlaku, protože chování tekutiny příliš neovlivní a jejich vynecháním se model zjednodušší.
 Snadnost implementace tu je na úkor realismu, tekutina je zde svými vlastnostmi mezi plynem, kapalinou a gelem. Přesto je dostatečně blízko reálné tekutině.
 
 Tento model ve zkratce funguje tak, že tekutinu rozdělí na částice, kde každá z nich představuje malý objem tekutiny. Částice se zrychlují takovým směrem, aby se hustota (a tím i tlak) blížil požadované hodnotě.
@@ -84,13 +85,13 @@ Lze je zobrazit jako čtyřcípou hvězdu s cípy obarvenými na jednu ze čtyř
 
 #figure(image("compound.png", width: 15%), caption: ["látka" složená ze zelené, šedé, modré a modré podčásti])
 
-Chemické chování látek (tvorba vazeb a vazebná energie) je inspirováno chovním malé organické látky, která obsahuje jeden uhlík se čtyřmi skupinami. Červená podčást se vlastnostmi blíží karboxylové skupině,
-zelená hydroxylové, modrá jako aminové skuině a šedá neutrálnímu vodíku. Ke každé látce je přiřazena energie (slučovací entalpie) (uložená v jejích vazbách), která je určena takto:
+Chemické chování látek (tvorba vazeb a vazebná energie) je inspirováno chováním malé organické látky, která obsahuje jeden uhlík se čtyřmi skupinami. Červená podčást se vlastnostmi blíží karboxylové skupině,
+zelená hydroxylové, modrá aminové skuině a šedá neutrálnímu vodíku. Každé látce je přiřazena energie (slučovací entalpie) (uložená v jejích vazbách), která je určena takto:
 
 $ sum^("podčásti")_(i) E_z(i) + c(i) dot (f("vedle i na jedné straně") + f("vedle i na druhé straně") + phi("naproti i")) $
 
 $E_z$ dává energii vazby mezi podčástí a středem látky. $f$ určuje sílu indukčního efektu mezi vedlejšími pozicemi, $phi$ mezi protějšími pozicemi. $c$ dává sílu vlivu indukčního efektu z ostatních podčástí na podčást.
-Energie látek jsou tak rozmanité a jen občas shodné (ale jsou shodně pro překlopené látky) a můžeme získávat zajímavé výsledky při počítání s jejich rozdíly.
+Hodnoty energií látek jsou tak rozmanité a jen občas shodné (ale jsou shodné pro překlopené látky) a můžeme získávat zajímavé výsledky při počítání s jejich rozdíly.
 
 Každá částice (každá kapka tekutiny) v sobě může mít libovolné množství každé látky. V průběhu simulace látky difundují. Při rozptylování dané látky se koncentrace látky z každé částice
 rovnoměrně rozmístí do všech částic v okruhu se stejným poloměrem, jaký je dosah jejich silových interakcí.
@@ -99,7 +100,7 @@ rovnoměrně rozmístí do všech částic v okruhu se stejným poloměrem, jak�
 
 Nejdůležitějšími funkčními jednotkami v buňkách v tomto modelu jsou proteiny. Ty se skládají z aminokyselin, které se zřetězí a složí do tvaru, který jim umožní pracovat.
 Skládání proteinů je na tuto simulaci moc složité, a tak je zde model opět hodně zjednodušený. V tomto modelu jsou aminokyseliny definovány
-jako látky vybrané z látek, které obsahují červenou a modrou podčást:
+jako látky vybrané z těch, které obsahují červenou a modrou podčást:
 
 #figure(image("blocks.png", width: 100%), caption: [látky vybrané jako proteinogení])
 
@@ -120,7 +121,7 @@ se struktura zpevňuje a je o to více stabilnější.
 === Aktivní místa
 
 V modelových proteinech se nacházejí aktivní místa, kde dochází k výměnám podskupin. Jako aktivní místa jsou definována prázdná pole, která mají na všech čtyřech sousedních polích právě jednu látku.
-Do takového místa se může vázat látka, která je doplňková k podčástem, které do aktivního místa míří. K červené a modré podčásti jsou navzajém doplňkové, zelené a šedé podčásti jsou doplňkové samy sobě.
+Do takového místa se může vázat látka, která je doplňková k podčástem, které do aktivního místa směřují. K červené je doplňková modá a naopak. Zelené a šedé podčásti jsou doplňkové samy sobě.
 @obrazek_protein obsahuje vyznačené místo, do kterého by se vázala látka #box(image("compound_cssz.png")). Aktivní místa mohou být maximálně 4 (preferují se ty vlevo a poté nahoře).
 
 V tomto modelu se aktivní místa, která jsou maximálně 4 pole od sebe (opět přednostně zleva a shora), spárují a katalyzují reakci výměny podčástí mezi látkami. Vyměňují se ty podčásti, které jsou k sobě nejblíže.
@@ -134,8 +135,8 @@ Je snadné ho implementovat a je nenáročný na výpočet. Dokud nenastanou kra
 
 Proteinům by neměla chybět možnost chovat se různě podle látek v jejich prostředí (aby buňky mohly měnit chování podle podnětů). Proto je součástí modelu allosterická modulace, která umožňuje
 proteinům obsahovat receptor a měnit podle něj svou efektivitu. Allosterická místa jsou v tomto modelu podobná aktivním - jsou to prázdná pole, která vedle sebe mají právě tři pole, která obsahují právě jednu
-látku. do takového místa se mohou vázat 4 různé látky, které mají tři podčásti doplňkové k těm v proteinu. Katalytický efekt je určen jako $sin("vzdálenost allosterického od nejbližšího aktivního místa")$.
-Sinus byl vybrán pro svůj průběh, nemění se moc rychle, ale mění se, aby se při posouvání allosterického místa postupně měnil modulační efekt.
+látku. do takového místa se mohou vázat 4 různé látky, které mají tři podčásti doplňkové k těm v proteinu. Modulační efekt je určen funkcí $sin("vzdálenost allosterického od nejbližšího aktivního místa")$.
+Sinus byl vybrán pro svůj průběh, nemění se moc rychle, ale mění se, a aby se při posouvání allosterického místa postupně měnil modulační efekt.
 
 Podle modulačního efektu se určuje celkový efekt modulátorů na protein:
 
@@ -169,7 +170,7 @@ kde $Delta H$ je již zmíněná slučovací entalpie látky. Pokud se zanedbá 
 $ Delta G = Delta H - Delta S dot T -> Delta G = Delta H $
 $ K = e^(-(Delta G) / (R T)) -> K = e^(-(Delta H) / (R T)) $
 
-spočítat rovnovážnou konstantu reakce. K té by se měl blížit poměr součinů koncentrací produktů a reaktantů, s rychlostí určenou sílou enzymatické katalýzy. Během kroku, kdy protein provádí danou reakci,
+spočítat rovnovážnou konstantu reakce. K té by se měl blížit poměr součinů koncentrací produktů a reaktantů, s rychlostí určenou účinností enzymatické katalýzy. Během kroku, kdy protein provádí danou reakci,
 se spočítá aktuální poměr ($K''$) a během kroku se změní na
 
 $ K' = "lerp"(K'', K, c_r dot M dot c_p) $
@@ -180,11 +181,11 @@ $ K' = (product^"produkty"_i (c_(p i) + delta)) / (product^"reaktanty"_i (c_(r i
 $ K' dot (product^"reaktanty"_i (c_(r i) - delta)) - product^"produkty"_i (c_(p i) + delta) = 0 $
 
 což je po roznásobení rovnice maximálně čtvrtého stupně v $delta$ (protože maximum jsou 4 aktivní místa) a tak je řešitelná. Z řešení se vybere takové $delta$, které je v absolutní hodnotě nejmenší a
-zároveň nedostane žádnou koncentraci do záporné hodnoty. Pokud mělo přesáhnout do záporu, delta se zmenší.
+zároveň nedostane žádnou koncentraci do záporné hodnoty. Pokud by měla přesáhnout do záporu, $delta$ se zmenší.
 
 === Genom <genom>
 
-Jako návod pro sestavení proteinu slouží genom. Ten je tvořen z látek #box(image("genome_F.png")) a #box(image("genome_T.png")), které jsou přes zelené podčásti spojené do řady (v tomto modelu jsou jen 2 báze):
+Jako návod pro sestavení proteinu slouží genom. Ten je tvořen z látek #box(image("genome_F.png")) a #box(image("genome_T.png")), které jsou přes zelené podčásti spojené do řady (v tomto modelu jsou jen 2 báze, červená a modrá):
 
 #figure(image("genome.png", width: 40%), caption: [ukázka úseku genetického kódu (FTTT/8)]) <geneticky_kod>
 
@@ -211,19 +212,19 @@ Modelové buňky obsahují centrum, což je speciální typ částice. Každá b
 (počítá se od konce úseku) (nebo pozitivní transkripční faktor). Od tohoto místa se genom čte po kodonech. Když se narazí na kodon `a`, který značí start kodon, začnou se do proteinu zapojovat
 další látky podle kodonů, až do kodonu `e` (stop kodonu) včetně.
 
-Každá buňka může obsahovat libovolné množství každého proteinu zakódovaného ve svém genomu, jako to je u látek. Během každého kroku se proteiny mohou tvořit a rozpadat.
+Každá buňka může obsahovat libovolné množství každého proteinu zakódovaného ve svém genomu, podobně jako to je u látek. Během každého kroku se proteiny mohou tvořit a rozpadat.
 Rozpadne se podíl proteinů podle již zmíněné stability. Vytvořit se může $1/2$ jednotek množství proteinů za krok, $M' dot c'_p$, pokud je tvorba daného proteinu podmíněna pozitivním traskripčním faktorem.
-$M'$ je efekt modulátorů na transkripční faktor a $c'_p$ je jeho koncentrace. Toto množství se sníží o součet $M' dot c'_p$ všech negativních transkripčních faktorů na celém úseku, který protein kóduje.
+$M'$ je efekt allosterických modulátorů na transkripční faktor a $c'_p$ je jeho koncentrace. Toto množství se sníží o součet $M' dot c'_p$ všech negativních transkripčních faktorů na celém úseku, který protein kóduje.
 Toto množství se sníží v případě, že buňka neobsahuje dostatečné množství látek na tvorbu proteinu.
 
-Modelové buňky potřebují k napodobení života dělat ještě několik věcí, které nespadají pod katalyzátory (enzymy) a transkripční faktory. Jednou z nich je dělení, při kterém se musí nakopírovat celý genom.
+Modelové buňky potřebují k napodobení života dělat ještě několik funkcí, které nespadají pod katalyzátory (enzymy) a transkripční faktory. Jednou z nich je dělení, při kterém se musí nakopírovat celý genom.
 Genom zde kopírují "genomové polymerázy", což jsou proteiny, které mají nanejvýš čtyři pole od sebe aktivní místa pro obě látky, ze kterých se tvoří genom (#box(image("genome_F.png")) a #box(image("genome_T.png")))
 (takže "pracují s genomem").
 Tyto aktivní místa se nepodílí na reakcích. Kromě toho musí provádět nějakou jinou reakci, ze které získají energii pro tvorbu nového genomu. Vždy, když tuto reakci provede, namnoží se kousek genomu (nebo
 dojde k mutaci). Kopírování probíhá od začátku, postupně.
 Za každý kousek, k nakopírování je malá šance, že se přeskočí báze nebo kodon, že se přidá náhodná báze nebo kodon a nebo, nebo že místo, odkud se právě kopíruje, skočí na náhodné místo v celém genomu.
-Při přidávání určuje šance na vybrání báze jejich koncentrace (koncentrace látky je váha při náhodném výběru).
-Při normálním vkládání další báze se také naváže náhodná báze, ale s velkou pravděpodobností na to, že se odváže, pokud je špatně. Když se odváže, nastane další pokus.
+Při přidávání bází určuje šance na vybrání báze jejich koncentrace (koncentrace látky je váha při náhodném výběru).
+Při normálním vkládání další báze se také naváže náhodná báze, ale s velkou pravděpodobností se odváže, pokud je špatně. Když se odváže, nastane další pokus.
 
 Buňky v modelu mají body zdraví. S každým krokem simulace 2 body ztratí, což představuje poškozující vliv prostředí - genom se může rozpadat nebo poškozovat a je potřeba ho udržovat.
 Údržbu provádí opravovací proteiny, které mají alespoň 4 pole dlouhý úsek červených a modrých konců (jako mají transkripční faktory, ale delší) a aktivní místo na některou z látek,
@@ -232,7 +233,7 @@ jinou reakci, ze které se uvolňí energie, dostane buňka, ve které protein j
 
 === Struktury
 
-Kromě centra může modelová buňka obsahovat jiné struktury. První z nich je "veklá struktura". Tou je další částice, která je k centru vázána "pružinou", představující cytoskelet.
+Kromě centra může modelová buňka obsahovat jiné struktury. První z nich je "velká struktura". Tou je další částice, která je k centru vázána "pružinou", představující cytoskelet.
 Velká struktura se sestavuje z "proteinů velké struktury", které mají tvar čtverce velikosti 5x5 polí.
 
 #figure(image("struct_proteins.png", width: 40%), caption: [proteiny struktury, nalevo velké, napravo malé (růžová značí překryv látek v jednom poli)])
@@ -241,7 +242,7 @@ Tyto proteiny neprovádí žádné reakce a nemohou být modulovány. Když se v
 Proteiny mohou být označeny tím, že jejich kód končí `3e`. Označené proteiny působí v částici struktury místo centra buňky. Značka se po vytvoření proteinu oddělí, takže
 se protein chová tak, jako kdyby značku neměl.
 
-Na velkou strukturu buňka může působit motory. To jsou proteiny, které jsou velké alespoň 5x5 polí a jsou bodově symetrické podle jejich středu. Zároveň musí provádět reakci, ze které získají energii.
+Na velkou strukturu může buňka působit motory. To jsou proteiny, které jsou velké alespoň 5x5 polí a jsou bodově symetrické podle jejich středu. Zároveň musí provádět reakci, ze které získají energii.
 Podle energie získané z reakce se zapůsobí silou na velkou strukturu ve směru kolem centra buňky. Pokud je protein označený, tak po směru hodinových ručiček, jinak proti směru hodinových ručiček.
 
 Druhý typ struktury jsou strukturní částice. Ty vyrábí slučovač částic, což je protein, který obsahuje dvě modulační místa vedle sebe, do kterých zapadá tato látka:
@@ -480,17 +481,19 @@ Klávesa B má podobný efekt, jen nastavuje koncentrace všech modelových amin
 
 = Závěr
 
+
 = Odkazy
 
-#link("https://biogenesis.sourceforge.net/")
-#link("https://thebibites.itch.io/the-bibites")
-#link("https://alien-project.org/")
-#link("https://github.com/SebLague/Fluid-Sim/tree/Episode-01")
-#link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf")
-#link("https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda")
-#link("https://cmake.org/download/")
-#link("https://vulkan.lunarg.com/")
-#link("https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator")
-#link("https://www.glfw.org/")
-#link("https://github.com/g-truc/glm")
-#link("https://www.boost.org/users/download/")
+ - #link("https://biogenesis.sourceforge.net/")
+ - #link("https://thebibites.itch.io/the-bibites")
+ - #link("https://alien-project.org/")
+ - #link("https://github.com/SebLague/Fluid-Sim/tree/Episode-01")
+ - #link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf")
+ - #link("https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda")
+ - #link("https://cmake.org/download/")
+ - #link("https://vulkan.lunarg.com/")
+ - #link("https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator")
+ - #link("https://www.glfw.org/")
+ - #link("https://github.com/g-truc/glm")
+ - #link("https://www.boost.org/users/download/")
+
