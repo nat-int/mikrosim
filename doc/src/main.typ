@@ -483,9 +483,11 @@ Klávesa B má podobný efekt, jen nastavuje koncentrace všech modelových amin
 
 = Závěr
 
-Aplikace dokže simulovat modelové mikroorganismy, které jsou schopné v dobrých podmínkách přežívat a do jisté míry se adaptovat na nové.
+Aplikace dokže simulovat modelové mikroorganismy, které jsou schopné v dobrých podmínkách přežívat a množit se. Do jisté míry se mohou adaptovat na podmínky nové.
 
 = Seznam odkazů
+
+(ke dni 3.3.2025) 
 
  - #link("https://biogenesis.sourceforge.net/")
  - #link("https://thebibites.itch.io/the-bibites")
