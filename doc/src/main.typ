@@ -257,11 +257,64 @@ se tvoří proteiny malé strukury, které mají struktury ve tvaru čtverce o v
 základ pro membránu. Když se do membrány přidá strukturní částice, zapojí se do náhodného místa v cyklu malých struktur. Strukturní částice se může do membrány přidat jedině když má buňka alespoň 3
 částice malé struktury.
 
+#figure(image("cell.png", width: 15%), caption: [buňka se strukturou (barvy jsou popsané v části #link(<view>)[Zobrazení simulace])])
+
 Buňka může mít maximálně 4 částice velké a malé struktury dohromady a maximálně 8 strukturních částic.
+
+Když má buňka alespoň 4 strukturní částice v uzavřené (neroztrhlé) membráně, ztrácí body zdraví poloviční rychlostí, protože ji membrána chrání.
 
 = Implementace
 
 == Použité technologie
+
+Pro implementaci byl zvolen jazyk C++, který umožňuje velkou míru abstrakce společně s velkou kontrolou nad průběhem programu, takže dovoluje dosáhnout efektivních programů relativně snadno.
+Na sestavování projeku byl vybrán CMake, který má dobrou podpru na více platformách i pro většinu rozšířených knihoven.
+
+Pro vykreslování a část simulování byl vybrán Vulkan, což je API pro práci s grafickými jednotkami podporující značnou část platforem i čipů. Skrze něj je možné grafické čipy nebo karty
+ovládat podrobně, takže je možné jejich výpočetní potenciál efektivně využívat. Vulkan je náročnější používat přímo a pro ulehčení práce byla použita knihovna Vulkan Memory Allocator a
+jako základ projektu byla použita knihovna na kreslení s Vulkanem, kterou jsem si před několika lety napsal, obsahující sadu abstrakcí k Vulkanu.
+Na implementaci shaderů byl použit jazyk GLSL.
+
+Na multiplatformní vytvoření okna aplikace byla použita knihovna GLFW pro její jednoduchost.
+
+Na výpočty byly využity knihovny glm, a komponenta math z knihovny boost. Glm pomáhá lépe zapisovat efektivní výpočty z lineární algebry. Z boost math byly využity funkce na řešení
+kvadratických, kubických a kvartických rovnic, které vyvstávají při výpočtech reakcí.
+
+Na zobrazování informací a interakci s uživatelem byla vybrána knihovna ImGUI, kterou je především snadné používat.
+
+== Struktura kódu
+
+V podsložkách `format`, `input`, `log`, `rendering` a `scripts` a souborech `util.cpp` a `util.hpp` se nachází již zmíněná (mírně upravená) knihovna s abstrakcemi k Vulkanu.
+
+V podsložce `shaders` jsou zdrojové kódy shaderů a většina projektu je přímo ve složce `src`.
+
+Vstup do programu se nachází v `main.cpp`, kde se jen nastaví náhoda a spustí aplikace z `app.cpp`.
+V těchto souborech je především vykreslování a zpracovávání vstupů uživatele.
+
+V `cell.cpp` je chování buňky a proteinů během simulace (bez interakce s jinými částicemi), v `protein.cpp` je statická analýza proteinů. `compounds.cpp` obsahuje několik funkcí pro práci s látkami.
+
+`parse.cpp` definuje funkce pro načítání hodnot ze souborů.
+
+V `particles.cpp` je kód pro řízení interakcí mezi částicemi.
+
+`views.cpp` definuje složitější podokna ("protein view" a "cell view").
+
+== Implementační detaily
+
+Aby byla simulace numericky stabilní, je změna v čase mezi kroky simulace konstantní.
+
+Pozice a interakce částic se počítají z většiny na grafické jednotce, aby jich mohlo být co nejvíce (interakce se lépe paralelizují). Procesor simuluje akce buňek a proteinů, které obsahují netriviální výpočty.
+
+Algoritmus pro hledání blízkých částic byl použit tento: #link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf"). Pro počítání prefixových součtů byl využit algoritmus z Nvidia GPU Gems 3 kapitoly 39 (#link("https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda")) bez oprav "bank" konfliktů, protože jsou tyto problémy a opravy specifické pro Nvidia hardware. Místo CUDA jsou tyto techniky implementovány v compute shaderech.
+
+Rozpouštění látek probíhá tak, že se do paměti grafické jednotky nakopírují koncentrace 4 látek (4 jsou protože jsou grafické jednotky obvykle dělané na počítání se čtveřicemi čísel) a během počítání interakcí
+částic se provede i rozpouštění. Při následujícím kroku simulace se koncentrace látek po rozpuštění zkopírují zpět do paměti prcesoru a nahrají se koncentrace následujících 4 látek. Takto se rozpouštěné látky postupně střídají.
+
+Aby se urychlila práce na procesoru v případech, kdy buňky obsahují mnoho různých proteinů, zhodnotí se každým krokem jen jeden protein a buď vytváření, nebo aktivita proteinu. Proteiny se postupně prochází po krocích a koeficienty jsou upravené tak, aby se započítaly změny za kroky, kdy se počítají jiné proteiny.
+
+Do koncentrací látek, které se právě rozpouští nebo kopírují zpět po rozpouštění, nelze právě zapisovat,
+protože by se přepsaly novými hodnotami (výsledky rozpouštění). Když lze zapisovat do všech "aminokyselin" (přibližně v $1/3$ případů),
+vyhodnocuje se vytváření proteinů, jinak se počítají jejich aktivity. Kdyby měl nějaký protein měnit koncentraci látek, které se zrovna rozpouští, tak se jeho vyhodnocení vynechá.
 
 = Návod k použití
 
@@ -272,9 +325,10 @@ Na sestavení projektu je potřeba mít nainstalované následující programy a
  - kompilátor c++, který (dostatečně) podporuje c++23, například g++ 14 nebo novější nebo clang++ 18 nebo novější
  - CMake 3.22 nebo novější (#link("https://cmake.org/download/"))
  - sestavovací systém, který je podporovaný cmake, například GNU make
- - knihovnu glm (#link("https://github.com/g-truc/glm"))
  - knihovny pro vulkan (včetně vulkan-hpp verze 1.3.301 nebo novější), typicky z LunarG Vulkan SDK (#link("https://vulkan.lunarg.com/")), ale pro linux bývají v repozitářích
  - knihovnu vulkan memory allocator (#link("https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator"))
+ - knihovnu glfw3 (#link("https://www.glfw.org/"))
+ - knihovnu glm (#link("https://github.com/g-truc/glm"))
  - knihovnu boost 1.81 nebo novější (stačí komponenta math) (#link("https://www.boost.org/users/download/"))
 
 Vše lze dohromady systému Ubuntu nainstalovat následujícím bash skriptem, ale pravděpodobně je v repozitářích několik z těchto věcí v moc starých verzích a tak je bude potřeba nainstalovat jinak:
@@ -405,14 +459,14 @@ Levým tlačítkem lze s proteiny a látkami pohybovat.
 
 Další je seznam proteinů. Při kliknutí na tlačítko "show" se daný protein vybere do #link(<protein_view>)[okna "protein view"]. Dále seznam obsahuje koncentraci proteinů a zkrácený zápis toho, co protein dělá.
 
-Nakonec je v okně tlačítko test, které provede testy na funkci počítající chemické reakce.
+Nakonec je v okně tlačítko test, které provede testy na funkci počítající chemické reakce a případné chyby vypíše na `stdout`.
 
-=== zobrazení simulace
+=== Zobrazení simulace <view>
 
 #figure(image("view.png", width: 70%))
 
 Na pozadí je šachovnice, kde strana každého políčka má délku stejnou, jako je dosah interakcí částic. Částice tekutiny se vykreslují modře až světle modře podle své koncentrace látky, která je vybrána
-v #link(<mikrosim_window>)[okně "mikrosim"]. Buňky a velké strukturní částice se vykreslují fialově až světle modře. Malé struktruní částice se vykreslují oranžově. Strukturní částice se vykreslují žlutě.
+v #link(<mikrosim_window>)[okně "mikrosim"]. Buňky a částice velké struktury se vykreslují fialově až světle modře. Částice malé struktury se vykreslují oranžově. Strukturní částice se vykreslují žlutě.
 
 Ve zobrazení lze držením kolečka myši nebo klávesami W (nahoru), S (dolu), A (vlevo) a D (vpravo) pohybovat s pohledem. Točením kolečkem myši se pohled přibližuje / oddaluje. Při držení levé klávesy shift
 jsou pohyby (až na tah se zmáčknutým kolečkem myši) pomalejší.
@@ -428,3 +482,15 @@ Klávesa B má podobný efekt, jen nastavuje koncentrace všech modelových amin
 
 = Odkazy
 
+#link("https://biogenesis.sourceforge.net/")
+#link("https://thebibites.itch.io/the-bibites")
+#link("https://alien-project.org/")
+#link("https://github.com/SebLague/Fluid-Sim/tree/Episode-01")
+#link("https://ramakarl.com/pdfs/2014_Hoetzlein_FastFixedRadius_Neighbors.pdf")
+#link("https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda")
+#link("https://cmake.org/download/")
+#link("https://vulkan.lunarg.com/")
+#link("https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator")
+#link("https://www.glfw.org/")
+#link("https://github.com/g-truc/glm")
+#link("https://www.boost.org/users/download/")

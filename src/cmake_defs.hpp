@@ -11,7 +11,7 @@ namespace version {
 	constexpr u32 combined = major << 24 | minor << 16 | patch << 8 | tweak;
 }
 namespace compile_options {
-	constexpr bool vulkan_validation = 1;
+	constexpr bool vulkan_validation = 0;
 	constexpr bool vulkan_validation_supress_loader_info = 1;
 	constexpr bool vulkan_validation_abort = 0;
 	constexpr u32 frames_in_flight = 2;
